@@ -16,14 +16,26 @@
 //              "agentExit"      — a monitored agent process just exited.
 //                                 Its action fires (flash), then the base
 //                                 theme is restored.
-//    trigger  — agent executable basename to match (e.g. "codex", "claude").
-//               Substring match: "claude" also catches "claude-code".
+//              "appLaunched"    — a foreground app was launched.
+//              "appTerminated"  — an app is quitting.
+//              "wake"           — the Mac woke from sleep.
+//              "fileDownload"   — a new file appeared in Downloads.
+//    trigger  — matcher for the event.
+//              Agents: executable basename, substring match ("claude"
+//                      also catches "claude-code").
+//              Apps:  bundle identifier or localised name, substring
+//                      match. Empty trigger matches anything (used by
+//                      sleep/wake, which fire for everyone).
 //    action   — engine behavior while the hook fires.
 //              "flash"   — quick brighten, fade back to rest, restore theme.
 //              "breathing" — switch to the hook theme while the agent runs.
 //    theme    — profile to switch to while the hook fires; empty string
 //               keeps the current one.
 //    enabled  — whether the hook runs.
+//
+//  What is NOT observable without a system extension: notifications from
+//  other apps, and download *progress*. "fileDownload" fires when the
+//  file lands — the moment the user actually cares about.
 //
 
 import Foundation
@@ -45,6 +57,7 @@ enum HookStore {
         let url = fileURL
         guard !FileManager.default.fileExists(atPath: url.path) else { return }
         let defaults: [Hook] = [
+            // Coding agents: attention while alive, flash on exit.
             .init(hookType: "agentAttention", trigger: "claude", action: "breathing", theme: "Yawn", enabled: true),
             .init(hookType: "agentAttention", trigger: "codex", action: "breathing", theme: "Yawn", enabled: true),
             .init(hookType: "agentAttention", trigger: "opencode", action: "breathing", theme: "Yawn", enabled: true),
@@ -55,6 +68,9 @@ enum HookStore {
             .init(hookType: "agentExit", trigger: "opencode", action: "flash", theme: "", enabled: true),
             .init(hookType: "agentExit", trigger: "herdr", action: "flash", theme: "", enabled: true),
             .init(hookType: "agentExit", trigger: "pi", action: "flash", theme: "", enabled: true),
+            // System events.
+            .init(hookType: "wake", trigger: "", action: "flash", theme: "", enabled: true),
+            .init(hookType: "fileDownload", trigger: "", action: "flash", theme: "", enabled: true),
         ]
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
@@ -90,5 +106,10 @@ enum HookStore {
     static func monitoredNames() -> [String] {
         let names = exitHooks().map(\.trigger) + attentionHooks().map(\.trigger)
         return Array(Set(names)).sorted()
+    }
+
+    /// Hooks of one event class, used by SystemEventRuntime.
+    static func hooks(ofType type: String) -> [Hook] {
+        load().filter { $0.enabled && $0.hookType == type }
     }
 }

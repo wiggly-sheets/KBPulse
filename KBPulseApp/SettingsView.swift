@@ -35,16 +35,16 @@ struct SettingsView: View {
                 }
                 ForEach(HookStore.load(), id: \.self) { hook in
                     HStack {
-                        Text(hook.hookType.replacingOccurrences(of: "agent", with: "Agent "))
+                        Text(hook.hookType)
                         Spacer()
-                        Text(hook.trigger)
+                        Text(hook.trigger.isEmpty ? "any" : hook.trigger)
                             .foregroundColor(.secondary)
                         Spacer()
                         Text(hook.action)
                             .foregroundColor(.secondary)
                     }
                 }
-                Text("Coding-agent hooks watch the process table for codex, claude, opencode, herdr and pi. While an agent is alive the backlight switches to its theme; when it exits the action fires and the base theme is restored.")
+                Text("Hooks watch for coding agents (codex, claude, opencode, herdr, pi), Mac wake from sleep, and new files in Downloads. Triggers and actions can be customized in ~/Documents/KBPulse/hooks.json.")
                     .font(.footnote)
                     .foregroundColor(.secondary)
             }

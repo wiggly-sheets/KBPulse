@@ -28,6 +28,7 @@
 		4F9B00000000000000000026 /* CLISymlinkManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F9B00000000000000000025 /* CLISymlinkManager.swift */; };
 		07462BD03687EDDA6A3403B8 /* AgentMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 49BCBCAA427398D8889A812F /* AgentMonitor.swift */; };
 		9956C14B64915C68D2C7C882 /* AgentHookRuntime.swift in Sources */ = {isa = PBXBuildFile; fileRef = 493B366651A62F2550960559 /* AgentHookRuntime.swift */; };
+		6D53FC538EF44A389BFF47D7 /* SystemEventRuntime.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0B98408AB084499A3DA8A9F /* SystemEventRuntime.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXShellScriptBuildPhase section */
@@ -77,6 +78,7 @@
 		4F9B0000000000000000001D /* ReactiveEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReactiveEngine.swift; sourceTree = "<group>"; };
 		4F9B0000000000000000001E /* ThemeEditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThemeEditorView.swift; sourceTree = "<group>"; };
 		4F9B00000000000000000025 /* CLISymlinkManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CLISymlinkManager.swift; sourceTree = "<group>"; };
+		F0B98408AB084499A3DA8A9F /* SystemEventRuntime.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SystemEventRuntime.swift; sourceTree = "<group>"; };
 		49BCBCAA427398D8889A812F /* AgentMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentMonitor.swift; sourceTree = "<group>"; };
 		493B366651A62F2550960559 /* AgentHookRuntime.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentHookRuntime.swift; sourceTree = "<group>"; };
 		4F9B00000000000000000010 /* KBPulse-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "KBPulse-Bridging-Header.h"; sourceTree = "<group>"; };
@@ -168,6 +170,7 @@
 				4F9B00000000000000000011 /* Assets.xcassets */,
 				4F9B00000000000000000012 /* Info.plist */,
 				4F9B00000000000000000025 /* CLISymlinkManager.swift */,
+				F0B98408AB084499A3DA8A9F /* SystemEventRuntime.swift */,
 				49BCBCAA427398D8889A812F /* AgentMonitor.swift */,
 				493B366651A62F2550960559 /* AgentHookRuntime.swift */,
 			);
@@ -286,6 +289,7 @@
 				4F9B00000000000000000020 /* ReactiveEngine.swift in Sources */,
 				4F9B00000000000000000021 /* ThemeEditorView.swift in Sources */,
 				4F9B00000000000000000026 /* CLISymlinkManager.swift in Sources */,
+				6D53FC538EF44A389BFF47D7 /* SystemEventRuntime.swift in Sources */,
 				07462BD03687EDDA6A3403B8 /* AgentMonitor.swift in Sources */,
 				9956C14B64915C68D2C7C882 /* AgentHookRuntime.swift in Sources */,
 				4F9B00000000000000000009 /* KBPPulseManager.m in Sources */,

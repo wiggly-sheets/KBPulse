@@ -37,6 +37,7 @@ final class AppState: ObservableObject {
         if engineOn {
             startEngine()
             AgentHookRuntime.shared.start(in: self)
+            SystemEventRuntime.shared.start(in: self)
         }
     }
 
@@ -82,7 +83,9 @@ final class AppState: ObservableObject {
         if on {
             startEngine()
             AgentHookRuntime.shared.start(in: self)
+            SystemEventRuntime.shared.start(in: self)
         } else {
+            SystemEventRuntime.shared.stop()
             AgentHookRuntime.shared.stop()
             engine.stop()
         }
