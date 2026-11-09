@@ -53,9 +53,10 @@
 }
 
 +(NSString *)configurationFile {
-    NSString * configuration = @"Yawn";
-    if ([NSProcessInfo.processInfo arguments][1]) {
-        configuration = [NSString stringWithFormat:@"/KBPulse/%@.json", NSProcessInfo.processInfo.arguments[1] ];
+    NSString * configuration = @"/KBPulse/Yawn.json";
+    NSArray *arguments = NSProcessInfo.processInfo.arguments;
+    if ([arguments count] > 1) {
+        configuration = [NSString stringWithFormat:@"/KBPulse/%@.json", arguments[1] ];
     }
     return configuration;
 }
