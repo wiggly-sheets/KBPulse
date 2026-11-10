@@ -2,10 +2,11 @@
 //  HookStore.swift
 //  KBPulseApp
 //
-//  Reads/writes ~/Documents/KBPulse/hooks.json. Hook *storage* is wired up;
-//  AgentHookRuntime reacts to coding-agent detection and SystemEventRuntime
-//  reacts to app launches/terminations, wake, and files landing in Downloads.
-//  See the hookType list below for every event class.
+//  Reads/writes ~/Documents/KBPulse/hooks.json. Settings exposes an editor
+//  for this file on its Hooks tab. AgentHookRuntime reacts to coding-agent
+//  detection and SystemEventRuntime reacts to app launches/terminations,
+//  wake, and files landing in Downloads. See the hookType list below for
+//  every event class.
 //
 //  Schema:
 //    [ { "hookType": "…", "trigger": "…", "action": "…", "theme": "…",
@@ -63,6 +64,20 @@ struct Hook: Codable, Hashable {
 enum HookStore {
     static var fileURL: URL { AppState.themesDir.appendingPathComponent("hooks.json") }
 
+    enum LoadError: LocalizedError {
+        case read(String)
+        case decode(String)
+
+        var errorDescription: String? {
+            switch self {
+            case .read(let detail):
+                return "Could not read hooks.json: \(detail)"
+            case .decode(let detail):
+                return "Could not decode hooks.json: \(detail)"
+            }
+        }
+    }
+
     /// Creates hooks.json with the default agent hooks if none exists, so a
     /// fresh install reacts to coding agents out of the box.
     static func ensureFile() {
@@ -93,6 +108,66 @@ enum HookStore {
         try? data.write(to: url, options: .atomic)
     }
 
+    /// Writes the full hook list back to hooks.json.
+    static func save(_ hooks: [Hook]) throws {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        let data = try encoder.encode(hooks)
+        try data.write(to: fileURL, options: .atomic)
+    }
+
+    /// Hook types documented in the header comment, in menu order.
+    static let hookTypes = [
+        "agentAttention", "agentExit", "appLaunched",
+        "appTerminated", "wake", "fileDownload",
+    ]
+
+    /// True for hook types that match a coding-agent executable.
+    static func isAgentType(_ hookType: String) -> Bool {
+        hookType == "agentAttention" || hookType == "agentExit"
+    }
+
+    /// Returns a user-facing problem with `hook`, or nil when it is valid.
+    static func validationError(for hook: Hook, themes: [String]) -> String? {
+        guard hookTypes.contains(hook.hookType) else {
+            return "Unknown hook type \"\(hook.hookType)\"."
+        }
+        guard hook.action == "flash" || hook.action == "breathing" else {
+            return "Action must be \"flash\" or \"breathing\"."
+        }
+        if hook.hookType == "agentExit" && hook.action != "flash" {
+            return "Agent exit hooks must use the flash action."
+        }
+        if hook.hookType == "agentAttention" && hook.action != "breathing" {
+            return "Agent attention hooks must use the breathing action."
+        }
+        if isAgentType(hook.hookType) {
+            let trigger = hook.trigger.trimmingCharacters(in: .whitespaces)
+            if trigger.isEmpty {
+                return "Agent hooks need a trigger (the executable name)."
+            }
+            if trigger.contains("/") {
+                return "Agent trigger must be an executable name, not a path."
+            }
+        }
+        if hook.hookType == "wake"
+            && !hook.trigger.trimmingCharacters(in: .whitespaces).isEmpty {
+            return "Wake hooks must have an empty trigger."
+        }
+        if hook.action == "breathing" {
+            guard !hook.theme.isEmpty else {
+                return "Breathing hooks need a theme."
+            }
+            guard themes.contains(hook.theme) else {
+                return "Theme \"\(hook.theme)\" does not exist."
+            }
+        }
+        if let cooldown = hook.cooldown, !cooldown.isFinite || cooldown < 0 {
+            return "Cooldown must be a finite number of seconds, zero or more."
+        }
+        return nil
+    }
+
     /// All enabled hooks, or [] when the file is missing/invalid.
     static func load() -> [Hook] {
         guard let data = try? Data(contentsOf: fileURL),
@@ -100,6 +175,25 @@ enum HookStore {
             return []
         }
         return list
+    }
+
+    /// Like `load()`, but reports read and decode failures so the editor can
+    /// refuse to overwrite a file it could not understand. A missing file
+    /// returns [].
+    static func loadForEditing() throws -> [Hook] {
+        let url = fileURL
+        guard FileManager.default.fileExists(atPath: url.path) else { return [] }
+        let data: Data
+        do {
+            data = try Data(contentsOf: url)
+        } catch {
+            throw LoadError.read(error.localizedDescription)
+        }
+        do {
+            return try JSONDecoder().decode([Hook].self, from: data)
+        } catch {
+            throw LoadError.decode(error.localizedDescription)
+        }
     }
 
     /// All enabled agent-exit hooks (fire once, transient).
@@ -115,7 +209,10 @@ enum HookStore {
     /// Every trigger basename across enabled agent hooks, used to populate
     /// the process-table scan.
     static func monitoredNames() -> [String] {
-        let names = (exitHooks().map(\.trigger) + attentionHooks().map(\.trigger)).filter { !$0.isEmpty }
+        let names = load()
+            .filter { $0.enabled && isAgentType($0.hookType) }
+            .map(\.trigger)
+            .filter { !$0.isEmpty }
         return Array(Set(names)).sorted()
     }
 
