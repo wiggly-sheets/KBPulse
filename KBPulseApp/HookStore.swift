@@ -3,11 +3,16 @@
 //  KBPulseApp
 //
 //  Reads/writes ~/Documents/KBPulse/hooks.json. Hook *storage* is wired up;
-//  the first runtime is AgentHookRuntime (coding-agent detection). Other
-//  hook types (file downloads, …) are reserved for later.
+//  AgentHookRuntime reacts to coding-agent detection and SystemEventRuntime
+//  reacts to app launches/terminations, wake, and files landing in Downloads.
+//  See the hookType list below for every event class.
 //
 //  Schema:
-//    [ { "hookType": "…", "trigger": "…", "action": "…", "theme": "…", "enabled": true } ]
+//    [ { "hookType": "…", "trigger": "…", "action": "…", "theme": "…",
+//        "enabled": true, "cooldown": 2 } ]
+//
+//    cooldown — optional seconds before the same hook fires again. The key
+//               is optional; older files without it decode normally.
 //
 //    hookType — event class that fired.
 //              "agentAttention" — a monitored agent process is alive and
@@ -25,6 +30,11 @@
 //              Apps:  bundle identifier or localised name, substring
 //                      match. Empty trigger matches anything (used by
 //                      sleep/wake, which fire for everyone).
+//              fileDownload: filename, substring match, or a glob such as
+//                      "*.zip" when the pattern contains "*" or "?".
+//                      Downloads ignores folders, hidden files, and partial
+//                      download suffixes (.crdownload, .download, .part,
+//                      .tmp, .filepart, .opdownload).
 //    action   — engine behavior while the hook fires.
 //              "flash"   — quick brighten, fade back to rest, restore theme.
 //                            The only action for "agentExit".
@@ -47,6 +57,7 @@ struct Hook: Codable, Hashable {
     var action: String
     var theme: String
     var enabled: Bool
+    var cooldown: Double?
 }
 
 enum HookStore {
@@ -71,7 +82,7 @@ enum HookStore {
             .init(hookType: "agentExit", trigger: "pi", action: "flash", theme: "", enabled: true),
             // System events.
             .init(hookType: "wake", trigger: "", action: "flash", theme: "", enabled: true),
-            .init(hookType: "fileDownload", trigger: "", action: "flash", theme: "", enabled: true),
+            .init(hookType: "fileDownload", trigger: "", action: "flash", theme: "", enabled: true, cooldown: 2),
         ]
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]

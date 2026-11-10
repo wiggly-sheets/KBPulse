@@ -18,21 +18,26 @@
 //
 
 import Cocoa
+import Darwin
 import Foundation
 
 final class SystemEventRuntime {
     static let shared = SystemEventRuntime()
 
+    private static let partialDownloadSuffixes = [".crdownload", ".download", ".part", ".tmp", ".filepart", ".opdownload"]
+
     private let workspace = NSWorkspace.shared
     private var timer: Timer?
     private var overrideTimer: Timer?
     private var lastDownloads: Set<String> = []
+    private var lastFired: [Hook: Date] = [:]
     private var wasAsleep = false
     private weak var state: AppState?
 
     func start(in state: AppState) {
         self.state = state
         wasAsleep = false
+        lastFired = [:]
         timer?.invalidate()
         timer = nil
         overrideTimer?.invalidate()
@@ -65,6 +70,7 @@ final class SystemEventRuntime {
         overrideTimer = nil
         removeObservers()
         lastDownloads = []
+        lastFired = [:]
         state?.clearOverride(owner: "system")
     }
 
@@ -109,31 +115,51 @@ final class SystemEventRuntime {
     private func currentDownloads() -> Set<String> {
         let downloads = FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask).first
         guard let downloads else { return [] }
-        let names = ((try? FileManager.default.contentsOfDirectory(atPath: downloads.path)) ?? [])
-            .filter { !$0.hasPrefix(".") }
-        return Set(names)
+        let urls = (try? FileManager.default.contentsOfDirectory(
+            at: downloads,
+            includingPropertiesForKeys: [.isDirectoryKey],
+            options: [.skipsHiddenFiles])) ?? []
+        var names = Set<String>()
+        for url in urls {
+            if (try? url.resourceValues(forKeys: [.isDirectoryKey]))?.isDirectory == true { continue }
+            let name = url.lastPathComponent
+            let lower = name.lowercased()
+            if Self.partialDownloadSuffixes.contains(where: { lower.hasSuffix($0) }) { continue }
+            names.insert(name)
+        }
+        return names
     }
 
     // MARK: - Firing
 
     private func fire(hookType: String, trigger: String) {
         guard let state else { return }
+        let now = Date()
         guard let hook = HookStore.hooks(ofType: hookType)
-            .first(where: { $0.enabled && matches($0.trigger, trigger) }) else { return }
+            .first(where: { matches($0.trigger, trigger) && cooldownElapsed($0, now: now) }) else { return }
         switch hook.action {
         case "flash":
             state.engine.flash()
         case "breathing":
-            applySystemOverride(theme: hook.theme, in: state)
+            guard applySystemOverride(theme: hook.theme, in: state) else { return }
         default:
-            break
+            return
         }
+        lastFired[hook] = Date()
+    }
+
+    /// True when the hook has no cooldown or enough time has passed since it
+    /// last fired. A hook that is cooling down is skipped so the next matching
+    /// hook can take the event.
+    private func cooldownElapsed(_ hook: Hook, now: Date) -> Bool {
+        guard let cooldown = hook.cooldown, let last = lastFired[hook] else { return true }
+        return now.timeIntervalSince(last) >= cooldown
     }
 
     /// Shows the hook theme for 30 s, then drops only the system layer. A newer
     /// system override replaces the previous timer.
-    private func applySystemOverride(theme: String, in state: AppState) {
-        guard !theme.isEmpty, state.themes.contains(theme) else { return }
+    private func applySystemOverride(theme: String, in state: AppState) -> Bool {
+        guard !theme.isEmpty, state.themes.contains(theme) else { return false }
         state.applyOverrideTheme(theme, owner: "system")
         overrideTimer?.invalidate()
         let timer = Timer(timeInterval: 30, repeats: false) { [weak self, weak state] _ in
@@ -142,12 +168,17 @@ final class SystemEventRuntime {
         }
         RunLoop.main.add(timer, forMode: .common)
         overrideTimer = timer
+        return true
     }
 
-    /// Substring match on the trigger, case-insensitive. Empty trigger
-    /// matches anything (used by sleep/wake, which fire for everyone).
+    /// Empty trigger matches anything (used by sleep/wake, which fire for
+    /// everyone). Patterns with "*" or "?" are globs; otherwise a
+    /// case-insensitive substring match.
     private func matches(_ pattern: String, _ value: String) -> Bool {
         guard !pattern.isEmpty else { return true }
+        if pattern.contains("*") || pattern.contains("?") {
+            return fnmatch(pattern.lowercased(), value.lowercased(), 0) == 0
+        }
         return value.localizedCaseInsensitiveContains(pattern)
     }
 }
