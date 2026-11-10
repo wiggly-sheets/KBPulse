@@ -8,10 +8,10 @@
 #import "KBPPulseManager.h"
 #import "KBPAnimator.h"
 
-@interface KBPPulseManager()
-+(void)loadPrivateFrameworks;
-+(void)modifyBacklightSettings;
-+(void)showBezel;
+@interface KBPPulseManager ()
+@property (nonatomic) double savedIdleDimTime;
+@property (nonatomic) BOOL savedAutoBrightness;
+@property (nonatomic) float savedBrightness;
 @end
 
 @implementation KBPPulseManager
@@ -33,13 +33,49 @@
 }
 
 +(void)modifyBacklightSettings {
+    if (KBPPulseManager.brightnessClient == nil) return;
+    unsigned long long kb = [self keyboardID];
     printf("Disabling idle-dimming and auto-brightness\n");
-    [KBPPulseManager.brightnessClient setIdleDimTime:0 forKeyboard:1];
-    [KBPPulseManager.brightnessClient enableAutoBrightness:false forKeyboard:1];
+    // Save the current values so restore can put them back exactly.
+    KBPPulseManager *manager = KBPPulseManager.sharedInstance;
+    manager.savedBrightness = [KBPPulseManager.brightnessClient brightnessForKeyboard:kb];
+    manager.savedIdleDimTime = [KBPPulseManager.brightnessClient idleDimTimeForKeyboard:kb];
+    manager.savedAutoBrightness = [KBPPulseManager.brightnessClient isAutoBrightnessEnabledForKeyboard:kb];
+    [KBPPulseManager.brightnessClient setIdleDimTime:0 forKeyboard:kb];
+    [KBPPulseManager.brightnessClient enableAutoBrightness:false forKeyboard:kb];
+}
+
++(unsigned long long)keyboardID {
+    // Prefer the built-in keyboard (ID 1) when present; otherwise fall back
+    // to the first reported backlight ID (e.g. external Magic Keyboard); else 1.
+    id ids = [KBPPulseManager.brightnessClient copyKeyboardBacklightIDs];
+    if ([ids isKindOfClass:[NSArray class]] && ((NSArray *)ids).count > 0) {
+        for (id entry in (NSArray *)ids) {
+            if ([entry isKindOfClass:[NSNumber class]] && [entry unsignedLongLongValue] == 1) {
+                return 1;
+            }
+        }
+        id first = ((NSArray *)ids)[0];
+        if ([first isKindOfClass:[NSNumber class]]) {
+            return [first unsignedLongLongValue];
+        }
+    }
+    return 1;
 }
 
 +(void)showBezel {
     [[NSClassFromString(@"OSDManager") sharedManager] showImage:11 onDisplayID:1 priority:1 msecUntilFade:1000 withText:@"KBPulse"];
+}
+
++(void)restoreBacklightSettings {
+    if (KBPPulseManager.brightnessClient == nil) return;
+    unsigned long long kb = [self keyboardID];
+    // Put the keyboard back the way the user left it: restore the ambient
+    // (auto-brightness) toggle, the idle-dim timeout, and the brightness level.
+    KBPPulseManager *manager = KBPPulseManager.sharedInstance;
+    [KBPPulseManager.brightnessClient enableAutoBrightness:manager.savedAutoBrightness forKeyboard:kb];
+    [KBPPulseManager.brightnessClient setBrightness:manager.savedBrightness fadeSpeed:350 commit:true forKeyboard:kb];
+    [KBPPulseManager.brightnessClient setIdleDimTime:manager.savedIdleDimTime forKeyboard:kb];
 }
 
 +(void)configure {

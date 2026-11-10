@@ -23,7 +23,11 @@ final class AppState: ObservableObject {
         .appendingPathComponent("KBPulse", isDirectory: true)
 
     init() {
-        KBPPulseManager.configure()
+        KBPPulseManager.loadPrivateFrameworks()
+        NotificationCenter.default.addObserver(forName: NSApplication.willTerminateNotification, object: nil, queue: nil) { _ in
+            self.engine.stop()
+            KBPPulseManager.restoreBacklightSettings()
+        }
         try? FileManager.default.createDirectory(at: Self.themesDir, withIntermediateDirectories: true)
         HookStore.ensureFile()
         if !FileManager.default.fileExists(atPath: Self.themesDir.appendingPathComponent("Yawn.json").path) {
@@ -35,6 +39,7 @@ final class AppState: ObservableObject {
         refreshThemes()
         refreshCLIStatus()
         if engineOn {
+            KBPPulseManager.modifyBacklightSettings()
             startEngine()
             AgentHookRuntime.shared.start(in: self)
             SystemEventRuntime.shared.start(in: self)
@@ -81,6 +86,7 @@ final class AppState: ObservableObject {
         engineOn = on
         UserDefaults.standard.set(on, forKey: "engineEnabled")
         if on {
+            KBPPulseManager.modifyBacklightSettings()
             startEngine()
             AgentHookRuntime.shared.start(in: self)
             SystemEventRuntime.shared.start(in: self)
@@ -88,6 +94,7 @@ final class AppState: ObservableObject {
             SystemEventRuntime.shared.stop()
             AgentHookRuntime.shared.stop()
             engine.stop()
+            KBPPulseManager.restoreBacklightSettings()
         }
     }
 

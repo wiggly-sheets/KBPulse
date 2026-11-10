@@ -27,6 +27,20 @@ int main(int argc, const char * argv[]) {
 
             }
         }];
+    dispatch_source_t signalSourceInt = dispatch_source_create(DISPATCH_SOURCE_TYPE_SIGNAL, SIGINT, 0, dispatch_get_main_queue());
+    dispatch_source_t signalSourceTerm = dispatch_source_create(DISPATCH_SOURCE_TYPE_SIGNAL, SIGTERM, 0, dispatch_get_main_queue());
+    signal(SIGINT, SIG_IGN);
+    signal(SIGTERM, SIG_IGN);
+    dispatch_source_set_event_handler(signalSourceInt, ^{
+        [KBPPulseManager restoreBacklightSettings];
+        exit(0);
+    });
+    dispatch_source_set_event_handler(signalSourceTerm, ^{
+        [KBPPulseManager restoreBacklightSettings];
+        exit(0);
+    });
+    dispatch_resume(signalSourceInt);
+    dispatch_resume(signalSourceTerm);
     }
     [[NSRunLoop currentRunLoop] run];
     return 0;

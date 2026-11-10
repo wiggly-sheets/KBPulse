@@ -22,6 +22,7 @@ final class Engine {
     private var reactive: ReactiveMode?
     private var overlay: (() -> Void)?
     private let overlayLock = NSLock()
+    private var stopSemaphore: DispatchSemaphore?
 
     func start(profile: KBPProfile, reactive: ReactiveMode?) {
         stop()
@@ -52,6 +53,10 @@ final class Engine {
 
     func stop() {
         runID += 1
+        let sema = stopSemaphore
+        stopSemaphore = nil
+        // Wait for thread to finish its iteration if it's running
+        _ = sema?.wait(timeout: .now() + 5)
         overlayLock.lock()
         overlay = nil
         overlayLock.unlock()
@@ -64,8 +69,13 @@ final class Engine {
         guard profile != nil else { return }
         runID += 1
         let id = runID
+        let sema = DispatchSemaphore(value: 0)
+        stopSemaphore = sema
         let name = reactive == nil ? "KBPEngine" : "KBPReactiveEngine"
-        let thread = Thread(block: { [weak self] in self?.run(id: id) })
+        let thread = Thread(block: { [weak self] in
+            defer { sema.signal() }
+            self?.run(id: id)
+        })
         thread.name = name
         self.thread = thread
         thread.start()
@@ -102,6 +112,5 @@ final class Engine {
             }
         }
         // Resting state when disabled or the theme switched: fade to off.
-        KBPAnimator.setBrightness(0, withDuration: 2500)
     }
 }
