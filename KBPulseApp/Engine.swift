@@ -15,6 +15,8 @@
 import Foundation
 
 final class Engine {
+    static let shared = Engine()
+    
     // Bumping this ID invalidates the running loop; the loop exits after its
     // current animation and fades the backlight off once.
     private var runID = 0
@@ -122,6 +124,15 @@ final class Engine {
         thread = nil
         profile = nil
         reactive = nil
+    }
+
+    // MARK: - Public API for CLI
+
+    func setTheme(_ name: String) {
+        let url = AppState.themesDir.appendingPathComponent("\(name).json")
+        let raw = (try? ThemeStore.rawDictionary(at: url)) ?? [:]
+        stop()
+        start(profile: KBPProfile(fileURL: url), reactive: ReactiveMode(forEngine: raw))
     }
 
     private func spawn() {

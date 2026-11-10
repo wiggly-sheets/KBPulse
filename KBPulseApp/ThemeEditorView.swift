@@ -154,6 +154,7 @@ struct ThemesTab: View {
                     .foregroundColor(.secondary)
             }
             Section("Typing reactions") {
+                Toggle("Typing reactions", isOn: $doc.hasReactive)
                 if doc.hasReactive {
                     Toggle("Enabled", isOn: $doc.reactive.enabled)
                     doubleField("Bump", $doc.reactive.bump)
@@ -165,8 +166,7 @@ struct ThemesTab: View {
                     Text("While enabled, this theme reacts to keystrokes instead of running its animation loop.")
                         .font(.footnote).foregroundColor(.secondary)
                 } else {
-                    Button("Add typing reactions") { doc.hasReactive = true }
-                    Text("Reacts to keystrokes instead of running the animation loop. Export and import cover it automatically.")
+                    Text("Reacts to keystrokes instead of running the animation loop. Save removes this section when toggled off.")
                         .font(.footnote).foregroundColor(.secondary)
                 }
             }

@@ -7,6 +7,7 @@
 //
 
 import SwiftUI
+import UniformTypeIdentifiers
 
 /// Formats a cooldown for display without trapping on extreme values.
 private func cooldownLabel(_ value: Double) -> String {
@@ -60,10 +61,51 @@ struct SettingsView: View {
             Picker("Theme", selection: state.themeBinding) {
                 ForEach(state.themes, id: \.self) { Text($0).tag($0) }
             }
-            CLISection(state: state)
+            CLIView(state: state)
         }
         .formStyle(.grouped)
         .onAppear { state.refreshThemes() }
+    }
+}
+
+private struct CLIView: View {
+    @ObservedObject var state: AppState
+
+    var body: some View {
+        Section("Command line") {
+            LabeledContent("Bundled", value: CLISymlinkManager.bundledCLIPath.path)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            LabeledContent("Installed", value: installedLabel)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            if state.cliOnPATH {
+                Text("`kbpulse` is on PATH.")
+                    .font(.footnote)
+                    .foregroundStyle(.green)
+            } else {
+                Text("`kbpulse` is not on PATH.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
+            if state.cliInstalledPath == nil {
+                Button("Install kbpulse to ~/.local/bin") {
+                    state.installCLI()
+                }
+            } else {
+                Button("Reinstall") {
+                    state.installCLI()
+                }
+            }
+            Text("The CLI runs the same engine as the app. Use it for scripts, launchers, keyboard shortcuts.")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    private var installedLabel: String {
+        guard let path = state.cliInstalledPath else { return "not installed" }
+        return path.path.replacingOccurrences(of: NSHomeDirectory(), with: "~")
     }
 }
 
@@ -87,6 +129,12 @@ private struct HooksTab: View {
                 }
                 ForEach(Array(hooks.enumerated()), id: \.offset) { index, hook in
                     row(index: index, hook: hook)
+                        .onDrag {
+                            NSItemProvider(object: "\(index)" as NSString)
+                        }
+                        .onDrop(of: [.text], isTargeted: nil) { providers in
+                            handleDrop(from: providers, toIndex: index)
+                        }
                 }
                 if !hooks.isEmpty {
                     Button("Reload") { load() }
@@ -124,10 +172,35 @@ private struct HooksTab: View {
         }
     }
 
+    // MARK: - Drop handling
+
+    private func handleDrop(from providers: [NSItemProvider], toIndex: Int) -> Bool {
+        guard let provider = providers.first else { return false }
+        let item = provider.loadItem(forTypeIdentifier: UTType.text.identifier, options: nil)
+        guard let data = item as? Data,
+              let itemStr = String(data: data, encoding: .utf8),
+              let fromIndex = Int(itemStr),
+              fromIndex != toIndex,
+              fromIndex >= 0,
+              fromIndex < hooks.count else { return false }
+
+        var updated = hooks
+        let hook = updated.remove(at: fromIndex)
+        updated.insert(hook, at: toIndex)
+        if let msg = persist(updated) {
+            error = msg
+        }
+        return true
+    }
+
     // MARK: - Rows
 
     private func row(index: Int, hook: Hook) -> some View {
         HStack(spacing: 8) {
+            Image(systemName: "line.3.horizontal")
+                .foregroundColor(.secondary)
+                .help("Drag to reorder")
+                .accessibilityLabel("Reorder hook")
             Toggle("", isOn: enabledBinding(index))
                 .labelsHidden()
                 .disabled(loadFailed)
@@ -400,46 +473,5 @@ private struct HookEditor: View {
             get: { draft.cooldown ?? 0 },
             set: { draft.cooldown = $0 > 0 ? $0 : nil }
         )
-    }
-}
-
-private struct CLISection: View {
-    @ObservedObject var state: AppState
-
-    var body: some View {
-        Section("Command line") {
-            LabeledContent("Bundled", value: CLISymlinkManager.bundledCLIPath.path)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-            LabeledContent("Installed", value: installedLabel)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-            if state.cliOnPATH {
-                Text("`kbpulse` is on PATH.")
-                    .font(.footnote)
-                    .foregroundStyle(.green)
-            } else {
-                Text("`kbpulse` is not on PATH.")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-            }
-            if state.cliInstalledPath == nil {
-                Button("Install kbpulse to ~/.local/bin") {
-                    state.installCLI()
-                }
-            } else {
-                Button("Reinstall") {
-                    state.installCLI()
-                }
-            }
-            Text("The CLI runs the same engine as the app. Use it for scripts, launchers, keyboard shortcuts.")
-                .font(.footnote)
-                .foregroundStyle(.secondary)
-        }
-    }
-
-    private var installedLabel: String {
-        guard let path = state.cliInstalledPath else { return "not installed" }
-        return path.path.replacingOccurrences(of: NSHomeDirectory(), with: "~")
     }
 }
