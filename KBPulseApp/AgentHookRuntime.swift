@@ -22,10 +22,12 @@ final class AgentHookRuntime {
     private var timer: Timer?
     private var previousAgents: Set<String> = []
     private weak var state: AppState?
+    private var diagnostics: [Hook: HookDiagnostics] = [:]
 
     func start(in state: AppState) {
         self.state = state
         previousAgents = []
+        diagnostics = [:]
         timer?.invalidate()
         timer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
             self?.tick()
@@ -38,6 +40,7 @@ final class AgentHookRuntime {
         timer?.invalidate()
         timer = nil
         previousAgents = []
+        diagnostics = [:]
         state?.clearOverride(owner: "agent")
     }
 
@@ -74,6 +77,8 @@ final class AgentHookRuntime {
                     $0.action == "breathing" && !$0.theme.isEmpty && state.themes.contains($0.theme)
                 }) else { continue }
             state.applyOverrideTheme(hook.theme, owner: "agent")
+            let d = diagnostics[hook]
+            diagnostics[hook] = HookDiagnostics(lastFired: Date(), skipped: d?.skipped ?? 0)
             return
         }
         state.clearOverride(owner: "agent")
@@ -86,5 +91,11 @@ final class AgentHookRuntime {
               let hook = HookStore.hooks(ofType: "agentExit", matching: agent).first,
               HookStore.allowedActions(for: "agentExit").contains(hook.action) else { return }
         state.engine.perform(hook.action)
+        let d = diagnostics[hook]
+        diagnostics[hook] = HookDiagnostics(lastFired: Date(), skipped: d?.skipped ?? 0)
+    }
+
+    static func diagnostics(for hook: Hook) -> HookDiagnostics? {
+        shared.diagnostics[hook]
     }
 }

@@ -25,6 +25,11 @@ import CoreGraphics
 import Darwin
 import Foundation
 
+struct HookDiagnostics {
+    var lastFired: Date?
+    var skipped: Int
+}
+
 final class SystemEventRuntime {
     static let shared = SystemEventRuntime()
 
@@ -37,6 +42,7 @@ final class SystemEventRuntime {
     private var lastFired: [Hook: Date] = [:]
     private var wasAsleep = false
     private weak var state: AppState?
+    private var diagnostics: [Hook: HookDiagnostics] = [:]
     // New event trackers
     private var frontmostDebounceTimer: Timer?
     private var lastFrontmostApp: String?
@@ -49,6 +55,7 @@ final class SystemEventRuntime {
         self.state = state
         wasAsleep = false
         lastFired = [:]
+        diagnostics = [:]
         lastFrontmostApp = nil
         lastScreenLocked = false
         lastIdleFire = nil
@@ -108,6 +115,7 @@ final class SystemEventRuntime {
         removeObservers()
         lastDownloads = []
         lastFired = [:]
+        diagnostics = [:]
         lastFrontmostApp = nil
         lastScreenLocked = false
         lastIdleFire = nil
@@ -241,6 +249,8 @@ final class SystemEventRuntime {
             state.engine.perform(hook.action)
         }
         lastFired[hook] = Date()
+        let d = diagnostics[hook]
+        diagnostics[hook] = HookDiagnostics(lastFired: now, skipped: d?.skipped ?? 0)
     }
 
     /// True when the hook has no cooldown or enough time has passed since it
@@ -248,7 +258,14 @@ final class SystemEventRuntime {
     /// hook can take the event.
     private func cooldownElapsed(_ hook: Hook, now: Date) -> Bool {
         guard let cooldown = hook.cooldown, let last = lastFired[hook] else { return true }
-        return now.timeIntervalSince(last) >= cooldown
+        let elapsed = now.timeIntervalSince(last)
+        if elapsed >= cooldown {
+            return true
+        }
+        // Track skipped fire due to cooldown
+        let d = diagnostics[hook]
+        diagnostics[hook] = HookDiagnostics(lastFired: d?.lastFired, skipped: (d?.skipped ?? 0) + 1)
+        return false
     }
 
     /// Shows the hook theme for 30 s, then drops only the system layer. A newer
@@ -275,5 +292,9 @@ final class SystemEventRuntime {
             return fnmatch(pattern.lowercased(), value.lowercased(), 0) == 0
         }
         return value.localizedCaseInsensitiveContains(pattern)
+    }
+
+    static func diagnostics(for hook: Hook) -> HookDiagnostics? {
+        shared.diagnostics[hook]
     }
 }

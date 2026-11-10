@@ -13,6 +13,32 @@ private func cooldownLabel(_ value: Double) -> String {
     String(format: "%.1f s", value)
 }
 
+/// Formats time since last fire for display.
+private func timeSince(_ date: Date) -> String {
+    let diff = -date.timeIntervalSinceNow
+    if diff < 60 {
+        return "\(Int(diff)) s ago"
+    } else if diff < 3600 {
+        let minutes = Int(diff / 60)
+        return "\(minutes) m ago"
+    } else {
+        let hours = Int(diff / 3600)
+        return "\(hours) h ago"
+    }
+}
+
+/// Merges diagnostics from both runtimes, preferring non-nil lastFired and summing skipped.
+private func mergedDiagnostics(for hook: Hook) -> HookDiagnostics? {
+    let sys = SystemEventRuntime.diagnostics(for: hook)
+    let agent = AgentHookRuntime.diagnostics(for: hook)
+    let lastFired = sys?.lastFired ?? agent?.lastFired
+    let skipped = (sys?.skipped ?? 0) + (agent?.skipped ?? 0)
+    if lastFired != nil || skipped > 0 {
+        return HookDiagnostics(lastFired: lastFired, skipped: skipped)
+    }
+    return nil
+}
+
 struct SettingsView: View {
     @ObservedObject var state: AppState
 
@@ -119,6 +145,22 @@ private struct HooksTab: View {
                let cooldown = hook.cooldown, cooldown > 0 {
                 Text(cooldownLabel(cooldown))
                     .foregroundColor(.secondary)
+            }
+            if let d = mergedDiagnostics(for: hook) {
+                if let lastFired = d.lastFired {
+                    Text(timeSince(lastFired))
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                } else {
+                    Text("never")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+                if d.skipped > 0 {
+                    Text("skipped \(d.skipped)×")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
             }
             Button("Edit") { edit(index) }
                 .disabled(loadFailed)
