@@ -6,6 +6,9 @@
 //    app launched / app terminated — NSWorkspace notifications
 //    sleep / wake               — NSWorkspace notifications
 //    file appears in Downloads  — poll the Downloads folder
+//    app frontmost change       — NSWorkspace.didActivateApplicationNotification (debounced)
+//    screen lock / unlock       — poll CGSessionCopyCurrentDictionary for CGSSessionScreenIsLocked
+//    idle threshold             — poll CGEventSource.secondsSinceLastEventType every 10 s
 //
 //  Notifications from other apps are NOT observable without a system
 //  extension (which needs notarization + entitlements), so that category
@@ -18,6 +21,7 @@
 //
 
 import Cocoa
+import CoreGraphics
 import Darwin
 import Foundation
 
@@ -33,15 +37,31 @@ final class SystemEventRuntime {
     private var lastFired: [Hook: Date] = [:]
     private var wasAsleep = false
     private weak var state: AppState?
+    // New event trackers
+    private var frontmostDebounceTimer: Timer?
+    private var lastFrontmostApp: String?
+    private var screenLockTimer: Timer?
+    private var lastScreenLocked = false
+    private var idleTimer: Timer?
+    private var lastIdleFire: Date?
 
     func start(in state: AppState) {
         self.state = state
         wasAsleep = false
         lastFired = [:]
+        lastFrontmostApp = nil
+        lastScreenLocked = false
+        lastIdleFire = nil
         timer?.invalidate()
         timer = nil
         overrideTimer?.invalidate()
         overrideTimer = nil
+        frontmostDebounceTimer?.invalidate()
+        frontmostDebounceTimer = nil
+        screenLockTimer?.invalidate()
+        screenLockTimer = nil
+        idleTimer?.invalidate()
+        idleTimer = nil
         removeObservers()
         // Seed the Downloads file set so we don't flash on files that were
         // already there before KBPulse launched.
@@ -61,6 +81,17 @@ final class SystemEventRuntime {
         workspace.notificationCenter.addObserver(
             self, selector: #selector(appTerminated(_:)),
             name: NSWorkspace.didTerminateApplicationNotification, object: nil)
+        workspace.notificationCenter.addObserver(
+            self, selector: #selector(appDidActivate(_:)),
+            name: NSWorkspace.didActivateApplicationNotification, object: nil)
+        // Poll for screen lock/unlock every 5 s
+        screenLockTimer = Timer.scheduledTimer(withTimeInterval: 5.0, repeats: true) { [weak self] _ in
+            self?.pollScreenLock()
+        }
+        // Poll for idle threshold every 10 s
+        idleTimer = Timer.scheduledTimer(withTimeInterval: 10.0, repeats: true) { [weak self] _ in
+            self?.pollIdle()
+        }
     }
 
     func stop() {
@@ -68,9 +99,18 @@ final class SystemEventRuntime {
         timer = nil
         overrideTimer?.invalidate()
         overrideTimer = nil
+        frontmostDebounceTimer?.invalidate()
+        frontmostDebounceTimer = nil
+        screenLockTimer?.invalidate()
+        screenLockTimer = nil
+        idleTimer?.invalidate()
+        idleTimer = nil
         removeObservers()
         lastDownloads = []
         lastFired = [:]
+        lastFrontmostApp = nil
+        lastScreenLocked = false
+        lastIdleFire = nil
         state?.clearOverride(owner: "system")
     }
 
@@ -101,6 +141,20 @@ final class SystemEventRuntime {
         fire(hookType: "wake", trigger: "")
     }
 
+    @objc private func appDidActivate(_ notification: Notification) {
+        guard let app = notification.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication else { return }
+        let bundleID = app.bundleIdentifier ?? app.localizedName ?? ""
+        // Debounce 200 ms to avoid flicker when apps activate in quick succession
+        frontmostDebounceTimer?.invalidate()
+        frontmostDebounceTimer = Timer.scheduledTimer(withTimeInterval: 0.2, repeats: false) { [weak self] _ in
+            guard let self else { return }
+            if self.lastFrontmostApp != bundleID {
+                self.lastFrontmostApp = bundleID
+                self.fire(hookType: "appFrontmost", trigger: bundleID)
+            }
+        }
+    }
+
     // MARK: - Downloads polling
 
     private func pollDownloads() {
@@ -128,6 +182,47 @@ final class SystemEventRuntime {
             names.insert(name)
         }
         return names
+    }
+
+    // MARK: - Screen lock / unlock polling
+
+    private func pollScreenLock() {
+        guard let state else { return }
+        let session = CGSessionCopyCurrentDictionary()
+        let isLocked = (session as? [String: Any])?["CGSSessionScreenIsLocked"] as? Bool ?? false
+        if isLocked != lastScreenLocked {
+            lastScreenLocked = isLocked
+            if isLocked {
+                fire(hookType: "screenLock", trigger: "")
+            } else {
+                fire(hookType: "screenUnlock", trigger: "")
+            }
+        }
+    }
+
+    // MARK: - Idle threshold polling
+
+    private func pollIdle() {
+        guard let state else { return }
+        let idleTime = CGEventSource.secondsSinceLastEventType(CGEventSourceStateID.hidSystemState, eventType: CGEventType.leftMouseDown)
+        // Fallback: if leftMouseDown returns 0, try .leftMouseUp
+        let effectiveIdle = idleTime > 0 ? idleTime : CGEventSource.secondsSinceLastEventType(CGEventSourceStateID.hidSystemState, eventType: CGEventType.leftMouseUp)
+        let hooks = HookStore.hooks(ofType: "idleThreshold")
+        for hook in hooks {
+            let trigger = hook.trigger.trimmingCharacters(in: .whitespaces)
+            let threshold = trigger.isEmpty ? 300.0 : (Double(trigger) ?? 300.0)
+            if effectiveIdle >= threshold {
+                // Fire once per threshold period
+                if let last = lastIdleFire, Date().timeIntervalSince(last) < threshold {
+                    continue
+                }
+                if cooldownElapsed(hook, now: Date()) {
+                    fire(hookType: "idleThreshold", trigger: String(Int(effectiveIdle)))
+                    lastIdleFire = Date()
+                    break // Only fire one hook per check
+                }
+            }
+        }
     }
 
     // MARK: - Firing

@@ -5,7 +5,8 @@
 //  Reads/writes ~/Documents/KBPulse/hooks.json. Settings exposes an editor
 //  for this file on its Hooks tab. AgentHookRuntime reacts to coding-agent
 //  detection and SystemEventRuntime reacts to app launches/terminations,
-//  wake, and files landing in Downloads. See the hookType list below for
+//  wake, files landing in Downloads, app frontmost changes, screen lock/
+//  unlock, and idle threshold. See the hookType list below for
 //  every event class.
 //
 //  Schema:
@@ -16,16 +17,21 @@
 //               is optional; older files without it decode normally.
 //
 //    hookType — event class that fired.
-//              "agentAttention" — a monitored agent process is alive and
-//                                 waiting for input. Backlight switches to
-//                                 its theme while it runs.
-//              "agentExit"      — a monitored agent process just exited.
-//                                 Supports "flash", then the base theme is
-//                                 restored.
-//              "appLaunched"    — a foreground app was launched.
-//              "appTerminated"  — an app is quitting.
-//              "wake"           — the Mac woke from sleep.
-//              "fileDownload"   — a new file appeared in Downloads.
+//              "agentAttention"  — a monitored agent process is alive and
+//                                  waiting for input. Backlight switches to
+//                                  its theme while it runs.
+//              "agentExit"       — a monitored agent process just exited.
+//                                  Supports "flash", then the base theme is
+//                                  restored.
+//              "appLaunched"     — a foreground app was launched.
+//              "appTerminated"   — an app is quitting.
+//              "wake"            — the Mac woke from sleep.
+//              "fileDownload"    — a new file appeared in Downloads.
+//              "appFrontmost"    — a different app became frontmost.
+//              "screenLock"      — the screen was locked.
+//              "screenUnlock"    — the screen was unlocked.
+//              "idleThreshold"   — the system was idle longer than the
+//                                  trigger threshold (seconds).
 //    trigger  — matcher for the event.
 //              Agents: executable basename, exact case-insensitive match.
 //              Apps:  bundle identifier or localised name, substring
@@ -36,6 +42,11 @@
 //                      Downloads ignores folders, hidden files, and partial
 //                      download suffixes (.crdownload, .download, .part,
 //                      .tmp, .filepart, .opdownload).
+//              appFrontmost: bundle identifier or localised name, substring
+//                      match (or glob with "*"/"?"). Empty matches any app.
+//              screenLock/screenUnlock: trigger must be empty.
+//              idleThreshold: numeric seconds (e.g. "300"). Empty uses
+//                      default 300 s. Non-numeric rejected.
 //    action   — engine behavior while the hook fires.
 //              "flash"   — quick brighten, fade back to rest, restore theme.
 //              "pulse"   — two quick brighten/dim beats, then fade out.
@@ -45,6 +56,7 @@
 //                            system event for 30 seconds).
 //              "agentExit" allows flash, pulse, hold, and fade.
 //              "agentAttention" allows breathing only.
+//              All new system events allow all actions.
 //    theme    — profile to switch to while the hook fires; empty string
 //               keeps the current one.
 //    enabled  — whether the hook runs.
@@ -124,6 +136,7 @@ enum HookStore {
     static let hookTypes = [
         "agentAttention", "agentExit", "appLaunched",
         "appTerminated", "wake", "fileDownload",
+        "appFrontmost", "screenLock", "screenUnlock", "idleThreshold",
     ]
 
     /// All supported actions.
@@ -134,6 +147,7 @@ enum HookStore {
         switch hookType {
         case "agentAttention": return ["breathing"]
         case "agentExit": return ["flash", "pulse", "hold", "fade"]
+        case "appFrontmost", "screenLock", "screenUnlock", "idleThreshold": return actions
         default: return actions
         }
     }
@@ -167,6 +181,22 @@ enum HookStore {
         if hook.hookType == "wake"
             && !hook.trigger.trimmingCharacters(in: .whitespaces).isEmpty {
             return "Wake hooks must have an empty trigger."
+        }
+        if hook.hookType == "screenLock" || hook.hookType == "screenUnlock" {
+            if !hook.trigger.trimmingCharacters(in: .whitespaces).isEmpty {
+                return "Screen lock/unlock hooks must have an empty trigger."
+            }
+        }
+        if hook.hookType == "idleThreshold" {
+            let trigger = hook.trigger.trimmingCharacters(in: .whitespaces)
+            if !trigger.isEmpty {
+                guard let value = Double(trigger), value > 0 else {
+                    return "Idle threshold trigger must be a positive number of seconds, or empty for default (300 s)."
+                }
+            }
+        }
+        if hook.hookType == "appFrontmost" {
+            // Any trigger is valid (bundle ID, name, glob, or empty for any app)
         }
         if hook.action == "breathing" {
             guard !hook.theme.isEmpty else {
