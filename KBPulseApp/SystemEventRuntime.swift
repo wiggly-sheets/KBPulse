@@ -9,6 +9,7 @@
 //    app frontmost change       — NSWorkspace.didActivateApplicationNotification (debounced)
 //    screen lock / unlock       — poll CGSessionCopyCurrentDictionary for CGSSessionScreenIsLocked
 //    idle threshold             — poll CGEventSource.secondsSinceLastEventType every 10 s
+//    music volume               — poll SystemVolumeClient every 5 s
 //
 //  Notifications from other apps are NOT observable without a system
 //  extension (which needs notarization + entitlements), so that category
@@ -50,6 +51,8 @@ final class SystemEventRuntime {
     private var lastScreenLocked = false
     private var idleTimer: Timer?
     private var lastIdleFire: Date?
+    private var musicVolumeTimer: Timer?
+    private var lastVolumeLevel: Float = 0.0
 
     func start(in state: AppState) {
         self.state = state
@@ -69,6 +72,8 @@ final class SystemEventRuntime {
         screenLockTimer = nil
         idleTimer?.invalidate()
         idleTimer = nil
+        musicVolumeTimer?.invalidate()
+        musicVolumeTimer = nil
         removeObservers()
         // Seed the Downloads file set so we don't flash on files that were
         // already there before KBPulse launched.
@@ -99,6 +104,12 @@ final class SystemEventRuntime {
         idleTimer = Timer.scheduledTimer(withTimeInterval: 10.0, repeats: true) { [weak self] _ in
             self?.pollIdle()
         }
+        // Poll for music volume every 5 s
+        musicVolumeTimer = Timer.scheduledTimer(withTimeInterval: 5.0, repeats: true) { [weak self] _ in
+            self?.pollMusicVolume()
+        }
+        // Seed last volume level
+        lastVolumeLevel = SystemVolumeClient.systemOutputVolume()
     }
 
     func stop() {
@@ -112,6 +123,8 @@ final class SystemEventRuntime {
         screenLockTimer = nil
         idleTimer?.invalidate()
         idleTimer = nil
+        musicVolumeTimer?.invalidate()
+        musicVolumeTimer = nil
         removeObservers()
         lastDownloads = []
         lastFired = [:]
@@ -119,6 +132,7 @@ final class SystemEventRuntime {
         lastFrontmostApp = nil
         lastScreenLocked = false
         lastIdleFire = nil
+        lastVolumeLevel = 0.0
         state?.clearOverride(owner: "system")
     }
 
@@ -231,6 +245,35 @@ final class SystemEventRuntime {
                 }
             }
         }
+    }
+
+    // MARK: - Music volume polling
+
+    private func pollMusicVolume() {
+        guard let state else { return }
+        let currentVolume = SystemVolumeClient.systemOutputVolume()
+        let percentage = Int(currentVolume * 100)
+        
+        // Check for each musicVolume hook
+        let hooks = HookStore.hooks(ofType: "musicVolume")
+        for hook in hooks {
+            let trigger = hook.trigger.trimmingCharacters(in: .whitespaces)
+            // Empty trigger means hook is disabled
+            guard !trigger.isEmpty else { continue }
+            
+            // Parse threshold from trigger (0-100)
+            guard let threshold = Double(trigger), threshold >= 0, threshold <= 100 else { continue }
+            
+            // Fire when volume crosses threshold from below
+            // lastVolumeLevel is in 0-1 range, threshold is percentage
+            let thresholdRatio = Float(threshold / 100.0)
+            if lastVolumeLevel < thresholdRatio && currentVolume >= thresholdRatio {
+                if cooldownElapsed(hook, now: Date()) {
+                    fire(hookType: "musicVolume", trigger: String(percentage))
+                }
+            }
+        }
+        lastVolumeLevel = currentVolume
     }
 
     // MARK: - Firing

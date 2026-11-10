@@ -29,6 +29,8 @@
 		07462BD03687EDDA6A3403B8 /* AgentMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 49BCBCAA427398D8889A812F /* AgentMonitor.swift */; };
 		9956C14B64915C68D2C7C882 /* AgentHookRuntime.swift in Sources */ = {isa = PBXBuildFile; fileRef = 493B366651A62F2550960559 /* AgentHookRuntime.swift */; };
 		6D53FC538EF44A389BFF47D7 /* SystemEventRuntime.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0B98408AB084499A3DA8A9F /* SystemEventRuntime.swift */; };
+		C1D2E3F4A5B6C7D8E9F0A1B4 /* SystemVolumeClient.m in Sources */ = {isa = PBXBuildFile; fileRef = C1D2E3F4A5B6C7D8E9F0A1B5 /* SystemVolumeClient.m */; };
+		C1D2E3F4A5B6C7D8E9F0A1B6 /* CoreAudio.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = B8F9E3C1A2B3D4E5F6A7B8C9 /* CoreAudio.framework */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXShellScriptBuildPhase section */
@@ -81,6 +83,8 @@
 		F0B98408AB084499A3DA8A9F /* SystemEventRuntime.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SystemEventRuntime.swift; sourceTree = "<group>"; };
 		49BCBCAA427398D8889A812F /* AgentMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentMonitor.swift; sourceTree = "<group>"; };
 		493B366651A62F2550960559 /* AgentHookRuntime.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentHookRuntime.swift; sourceTree = "<group>"; };
+		C1D2E3F4A5B6C7D8E9F0A1B3 /* SystemVolumeClient.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = SystemVolumeClient.h; sourceTree = "<group>"; };
+		C1D2E3F4A5B6C7D8E9F0A1B5 /* SystemVolumeClient.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = SystemVolumeClient.m; sourceTree = "<group>"; };
 		4F9B00000000000000000010 /* KBPulse-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "KBPulse-Bridging-Header.h"; sourceTree = "<group>"; };
 		4F9B00000000000000000011 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		4F9B00000000000000000012 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
@@ -96,6 +100,7 @@
 		4FF355912722124900F7F65E /* README.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = README.md; sourceTree = "<group>"; };
 		4FF355922722124900F7F65E /* LICENSE */ = {isa = PBXFileReference; lastKnownFileType = text; path = LICENSE; sourceTree = "<group>"; };
 		4FF3559427221FBA00F7F65E /* LOGO.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = LOGO.png; sourceTree = "<group>"; };
+		B8F9E3C1A2B3D4E5F6A7B8C9 /* CoreAudio.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; path = /System/Library/Frameworks/CoreAudio.framework; sourceTree = "<absolute>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -110,6 +115,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				C1D2E3F4A5B6C7D8E9F0A1B6 /* CoreAudio.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -173,6 +179,8 @@
 				F0B98408AB084499A3DA8A9F /* SystemEventRuntime.swift */,
 				49BCBCAA427398D8889A812F /* AgentMonitor.swift */,
 				493B366651A62F2550960559 /* AgentHookRuntime.swift */,
+				C1D2E3F4A5B6C7D8E9F0A1B3 /* SystemVolumeClient.h */,
+				C1D2E3F4A5B6C7D8E9F0A1B5 /* SystemVolumeClient.m */,
 			);
 			path = KBPulseApp;
 			sourceTree = "<group>";
@@ -273,6 +281,7 @@
 				4FF354D82720D3B500F7F65E /* KBPPulseManager.m in Sources */,
 				4F97943227274FAF003273E9 /* KBPAnimation.m in Sources */,
 				4FF354DD2720DAC400F7F65E /* KBPAnimator.m in Sources */,
+				C1D2E3F4A5B6C7D8E9F0A1B4 /* SystemVolumeClient.m in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -296,6 +305,7 @@
 				4F9B00000000000000000008 /* KBPAnimation.m in Sources */,
 				4F9B00000000000000000007 /* KBPProfile.m in Sources */,
 				4F9B00000000000000000006 /* KBPAnimator.m in Sources */,
+				C1D2E3F4A5B6C7D8E9F0A1B4 /* SystemVolumeClient.m in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

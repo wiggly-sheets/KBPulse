@@ -6,7 +6,7 @@
 //  for this file on its Hooks tab. AgentHookRuntime reacts to coding-agent
 //  detection and SystemEventRuntime reacts to app launches/terminations,
 //  wake, files landing in Downloads, app frontmost changes, screen lock/
-//  unlock, and idle threshold. See the hookType list below for
+//  unlock, idle threshold, and music volume. See the hookType list below for
 //  every event class.
 //
 //  Schema:
@@ -32,6 +32,8 @@
 //              "screenUnlock"    — the screen was unlocked.
 //              "idleThreshold"   — the system was idle longer than the
 //                                  trigger threshold (seconds).
+//              "musicVolume"     — system output volume crossed the trigger
+//                                  threshold (0-100%). Empty trigger disables.
 //    trigger  — matcher for the event.
 //              Agents: executable basename, exact case-insensitive match.
 //              Apps:  bundle identifier or localised name, substring
@@ -47,6 +49,7 @@
 //              screenLock/screenUnlock: trigger must be empty.
 //              idleThreshold: numeric seconds (e.g. "300"). Empty uses
 //                      default 300 s. Non-numeric rejected.
+//              musicVolume: percentage 0-100 as string, or empty for off.
 //    action   — engine behavior while the hook fires.
 //              "flash"   — quick brighten, fade back to rest, restore theme.
 //              "pulse"   — two quick brighten/dim beats, then fade out.
@@ -137,6 +140,7 @@ enum HookStore {
         "agentAttention", "agentExit", "appLaunched",
         "appTerminated", "wake", "fileDownload",
         "appFrontmost", "screenLock", "screenUnlock", "idleThreshold",
+        "musicVolume",
     ]
 
     /// All supported actions.
@@ -147,7 +151,7 @@ enum HookStore {
         switch hookType {
         case "agentAttention": return ["breathing"]
         case "agentExit": return ["flash", "pulse", "hold", "fade"]
-        case "appFrontmost", "screenLock", "screenUnlock", "idleThreshold": return actions
+        case "appFrontmost", "screenLock", "screenUnlock", "idleThreshold", "musicVolume": return actions
         default: return actions
         }
     }
@@ -197,6 +201,14 @@ enum HookStore {
         }
         if hook.hookType == "appFrontmost" {
             // Any trigger is valid (bundle ID, name, glob, or empty for any app)
+        }
+        if hook.hookType == "musicVolume" {
+            let trigger = hook.trigger.trimmingCharacters(in: .whitespaces)
+            if !trigger.isEmpty {
+                guard let threshold = Double(trigger), threshold >= 0, threshold <= 100 else {
+                    return "Music volume trigger must be a number between 0 and 100, or empty for off."
+                }
+            }
         }
         if hook.action == "breathing" {
             guard !hook.theme.isEmpty else {

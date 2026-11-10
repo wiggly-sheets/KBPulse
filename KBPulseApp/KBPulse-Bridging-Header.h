@@ -9,3 +9,4 @@
 #import "../KBPulse/KBPAnimator.h"
 #import "../KBPulse/KBPPulseManager.h"
 #import "../KBPulse/KBPProfile.h"
+#import "SystemVolumeClient.h"
