@@ -16,6 +16,10 @@ import UniformTypeIdentifiers
 // validation and the in-memory copy stays intact.
 final class ThemeDoc: ObservableObject {
     @Published var name = ""
+    @Published var author = ""
+    @Published var version = ""
+    @Published var homepage = ""
+    @Published var previewImageURL = ""
     @Published var comment = ""
     @Published var animations: [AnimDoc] = []
     @Published var hasReactive = false
@@ -35,6 +39,10 @@ final class ThemeDoc: ObservableObject {
         let dict = try ThemeStore.rawDictionary(at: url)
         raw = dict
         name = dict["Name"] as? String ?? ""
+        author = dict["Author"] as? String ?? ""
+        version = dict["Version"] as? String ?? ""
+        homepage = dict["Homepage"] as? String ?? ""
+        previewImageURL = dict["Preview Image URL"] as? String ?? ""
         comment = dict["Description"] as? String ?? ""
         animations = ((dict["Animations"] as? [[String: Any]]) ?? []).map {
             AnimDoc(name: $0["Name"] as? String ?? "",
@@ -55,6 +63,10 @@ final class ThemeDoc: ObservableObject {
     func reset() {
         raw = [:]
         name = ""
+        author = ""
+        version = ""
+        homepage = ""
+        previewImageURL = ""
         comment = ""
         animations = []
         hasReactive = false
@@ -65,6 +77,10 @@ final class ThemeDoc: ObservableObject {
         var dict = raw
         dict["Name"] = name
         dict["Description"] = comment
+        dict["Author"] = author
+        dict["Version"] = version
+        dict["Homepage"] = homepage
+        dict["Preview Image URL"] = previewImageURL
         dict["Animations"] = animations.map {
             ["Name": $0.name, "Description": $0.comment,
              "Brightness": min(max($0.brightness, 0), 1),
@@ -124,6 +140,18 @@ struct ThemesTab: View {
                     }
                     .padding(.vertical, 2)
                 }
+            }
+            Section("Preview") {
+                Button("Test this theme (10s)") {
+                    let url = AppState.themesDir.appendingPathComponent("\(selected).json")
+                    state.engine.stop()
+                    let profile = KBPProfile(fileURL: url)
+                    state.engine.start(profile: profile, reactive: doc.reactive.enabled ? doc.reactive : nil)
+                }
+                .disabled(selected.isEmpty || doc.animations.isEmpty)
+                Text("Temporarily applies the theme for 10 seconds.")
+                    .font(.footnote)
+                    .foregroundColor(.secondary)
             }
             Section("Typing reactions") {
                 if doc.hasReactive {

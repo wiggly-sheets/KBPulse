@@ -88,10 +88,9 @@ private struct HooksTab: View {
                 ForEach(Array(hooks.enumerated()), id: \.offset) { index, hook in
                     row(index: index, hook: hook)
                 }
-                HStack {
-                    Button("Add hook") { add() }
-                        .disabled(loadFailed)
+                if !hooks.isEmpty {
                     Button("Reload") { load() }
+                        .buttonStyle(.plain)
                 }
             }
             if let error {
@@ -100,6 +99,8 @@ private struct HooksTab: View {
                     .foregroundColor(.red)
             }
             Section {
+                Button("Add hook") { add() }
+                    .disabled(loadFailed)
                 Text("Default hooks are created automatically on first launch. The file lives at ~/Documents/KBPulse/hooks.json and the runtime reads it fresh.")
                     .font(.footnote)
                     .foregroundColor(.secondary)
