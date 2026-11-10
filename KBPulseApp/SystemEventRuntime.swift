@@ -137,13 +137,13 @@ final class SystemEventRuntime {
         let now = Date()
         guard let hook = HookStore.hooks(ofType: hookType)
             .first(where: { matches($0.trigger, trigger) && cooldownElapsed($0, now: now) }) else { return }
+        let allowed = HookStore.allowedActions(for: hookType)
+        guard allowed.contains(hook.action) else { return }
         switch hook.action {
-        case "flash":
-            state.engine.flash()
         case "breathing":
             guard applySystemOverride(theme: hook.theme, in: state) else { return }
         default:
-            return
+            state.engine.perform(hook.action)
         }
         lastFired[hook] = Date()
     }

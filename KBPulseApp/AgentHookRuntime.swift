@@ -84,7 +84,7 @@ final class AgentHookRuntime {
     private func fireExitHook(for agent: String) {
         guard let state,
               let hook = HookStore.hooks(ofType: "agentExit", matching: agent).first,
-              hook.action == "flash" else { return }
-        state.engine.flash()
+              HookStore.allowedActions(for: "agentExit").contains(hook.action) else { return }
+        state.engine.perform(hook.action)
     }
 }

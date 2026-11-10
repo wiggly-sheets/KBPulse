@@ -38,9 +38,13 @@
 //                      .tmp, .filepart, .opdownload).
 //    action   — engine behavior while the hook fires.
 //              "flash"   — quick brighten, fade back to rest, restore theme.
-//                            The only action for "agentExit".
+//              "pulse"   — two quick brighten/dim beats, then fade out.
+//              "hold"    — brighten, hold 2 s, fade out.
+//              "fade"    — fade out and hold dark for 1 s.
 //              "breathing" — switch to the hook theme (agent while it runs,
 //                            system event for 30 seconds).
+//              "agentExit" allows flash, pulse, hold, and fade.
+//              "agentAttention" allows breathing only.
 //    theme    — profile to switch to while the hook fires; empty string
 //               keeps the current one.
 //    enabled  — whether the hook runs.
@@ -122,6 +126,18 @@ enum HookStore {
         "appTerminated", "wake", "fileDownload",
     ]
 
+    /// All supported actions.
+    static let actions = ["flash", "pulse", "hold", "fade", "breathing"]
+
+    /// Returns the actions allowed for a hook type.
+    static func allowedActions(for hookType: String) -> [String] {
+        switch hookType {
+        case "agentAttention": return ["breathing"]
+        case "agentExit": return ["flash", "pulse", "hold", "fade"]
+        default: return actions
+        }
+    }
+
     /// True for hook types that match a coding-agent executable.
     static func isAgentType(_ hookType: String) -> Bool {
         hookType == "agentAttention" || hookType == "agentExit"
@@ -132,11 +148,9 @@ enum HookStore {
         guard hookTypes.contains(hook.hookType) else {
             return "Unknown hook type \"\(hook.hookType)\"."
         }
-        guard hook.action == "flash" || hook.action == "breathing" else {
-            return "Action must be \"flash\" or \"breathing\"."
-        }
-        if hook.hookType == "agentExit" && hook.action != "flash" {
-            return "Agent exit hooks must use the flash action."
+        let allowed = allowedActions(for: hook.hookType)
+        guard allowed.contains(hook.action) else {
+            return "Action must be one of \(allowed.joined(separator: ", "))."
         }
         if hook.hookType == "agentAttention" && hook.action != "breathing" {
             return "Agent attention hooks must use the breathing action."

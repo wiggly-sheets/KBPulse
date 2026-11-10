@@ -289,6 +289,12 @@ private struct HookEditor: View {
             Picker("Hook type", selection: $draft.hookType) {
                 ForEach(HookStore.hookTypes, id: \.self) { Text($0).tag($0) }
             }
+            .onChange(of: draft.hookType) { _ in
+                let allowed = HookStore.allowedActions(for: draft.hookType)
+                if !allowed.contains(draft.action) {
+                    draft.action = allowed.first ?? draft.action
+                }
+            }
             TextField("Trigger", text: $draft.trigger)
             if draft.hookType == "agentAttention" || draft.hookType == "agentExit" {
                 Text("Executable name, for example claude or codex. Case-insensitive.")
@@ -296,8 +302,9 @@ private struct HookEditor: View {
                     .foregroundColor(.secondary)
             }
             Picker("Action", selection: $draft.action) {
-                Text("Flash").tag("flash")
-                Text("Breathing").tag("breathing")
+                ForEach(HookStore.allowedActions(for: draft.hookType), id: \.self) { action in
+                    Text(action.capitalized).tag(action)
+                }
             }
             Picker("Theme", selection: $draft.theme) {
                 Text("None").tag("")

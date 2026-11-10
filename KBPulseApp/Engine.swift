@@ -68,6 +68,45 @@ final class Engine {
         }
     }
 
+    /// Runs a hook action on the engine thread. While reactive mode is active,
+    /// non-breathing actions become a flash impulse. Breathing is handled by
+    /// the caller as a theme override, so it is a no-op here.
+    func perform(_ action: String) {
+        guard action != "breathing" else { return }
+        reactiveEngineLock.lock()
+        let reactive = reactiveEngine
+        reactiveEngineLock.unlock()
+        if reactive != nil {
+            flash()
+            return
+        }
+        switch action {
+        case "pulse":
+            overlay {
+                for _ in 0..<2 {
+                    KBPAnimator.setBrightness(1, withDuration: 80)
+                    Thread.sleep(forTimeInterval: 0.08)
+                    KBPAnimator.setBrightness(0, withDuration: 120)
+                    Thread.sleep(forTimeInterval: 0.12)
+                }
+                KBPAnimator.setBrightness(0, withDuration: 800)
+            }
+        case "hold":
+            overlay {
+                KBPAnimator.setBrightness(1, withDuration: 80)
+                Thread.sleep(forTimeInterval: 2.08)
+                KBPAnimator.setBrightness(0, withDuration: 1500)
+            }
+        case "fade":
+            overlay {
+                KBPAnimator.setBrightness(0, withDuration: 2000)
+                Thread.sleep(forTimeInterval: 3.0)
+            }
+        default:
+            flash()
+        }
+    }
+
     func stop() {
         _ = bumpRunID()
         let sema = stopSemaphore
