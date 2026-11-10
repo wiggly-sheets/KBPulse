@@ -11,7 +11,8 @@
 @implementation KBPAnimator
 
 +(void)setBrightness:(float)brightness withDuration:(int)duration {
-    [KBPPulseManager.brightnessClient setBrightness:brightness fadeSpeed:duration commit:true forKeyboard:1];
+    unsigned long long kb = [KBPPulseManager keyboardID];
+    [KBPPulseManager.brightnessClient setBrightness:brightness fadeSpeed:duration commit:true forKeyboard:kb];
 }
 
 +(void)brightenWithDuration:(int)duration {
@@ -23,7 +24,8 @@
 }
 
 +(float)currentBrightness {
-    return [KBPPulseManager.brightnessClient brightnessForKeyboard:1];
+    unsigned long long kb = [KBPPulseManager keyboardID];
+    return [KBPPulseManager.brightnessClient brightnessForKeyboard:kb];
 }
 
 +(BOOL)isBright {
