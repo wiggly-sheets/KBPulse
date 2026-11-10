@@ -2,12 +2,11 @@
 //  AgentHookRuntime.swift
 //  KBPulseApp
 //
-//  Polls the process table for monitored coding agents and drives the engine:
-//    no agent running        → base theme
-//    agent alive             → "needs attention": switch to the attention
-//                              hook's theme (or keep the base one if none).
-//    agent exits             → fire the exit hook's action (flash), then
-//                              restore the base theme.
+//  Polls the process table for monitored coding agents and drives a transient
+//  theme override, leaving the persisted base theme untouched:
+//    agent starts        → switch to an attention hook theme for that agent.
+//    agent exits         → re-evaluate the theme for any remaining agents or
+//                          clear the override, then fire its exit hook.
 //
 //  Polling is coarse (1 s) — agents don't flicker that fast, and the engine
 //  thread does the actual brightness work. The runtime is a singleton on
@@ -21,16 +20,12 @@ final class AgentHookRuntime {
     static let shared = AgentHookRuntime()
 
     private var timer: Timer?
-    private var wasRunning = false
-    private var baseTheme = ""
-    private var baseEngineOn = true
+    private var previousAgents: Set<String> = []
     private weak var state: AppState?
 
     func start(in state: AppState) {
         self.state = state
-        baseTheme = state.selectedTheme
-        baseEngineOn = state.engineOn
-        wasRunning = false
+        previousAgents = []
         timer?.invalidate()
         timer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
             self?.tick()
@@ -42,81 +37,54 @@ final class AgentHookRuntime {
     func stop() {
         timer?.invalidate()
         timer = nil
-        if wasRunning {
-            restoreBase()
-            wasRunning = false
-        }
+        previousAgents = []
+        state?.clearOverride(owner: "agent")
     }
 
     // MARK: - Tick
 
     private func tick() {
         guard let state else { return }
-        let running = AgentMonitor.isRunning
-        if running {
-            if !wasRunning {
-                // Transition: agent came up. Save the base theme so we can
-                // restore it later, then switch to the attention hook's theme.
-                baseTheme = state.selectedTheme
-                baseEngineOn = state.engineOn
-                wasRunning = true
-                applyAttentionHook()
-            }
-            // While running: if the user changed the base theme manually,
-            // the attention hook theme wins; otherwise keep current.
-            return
+        guard let agents = AgentMonitor.activeAgents else { return }
+        let current = Set(agents)
+        guard current != previousAgents else { return }
+        let exited = previousAgents.subtracting(current).sorted()
+        previousAgents = current
+
+        // Reconcile theme first: startEngine() wipes a pending flash overlay.
+        if current.isEmpty {
+            state.clearOverride(owner: "agent")
+        } else {
+            applyAttentionHook(active: current)
         }
-        if wasRunning {
-            // Transition: the last agent exited. Fire the exit hook, then
-            // restore the base theme.
-            fireExitHooks()
-            restoreBase()
-            wasRunning = false
+        for name in exited {
+            fireExitHook(for: name)
         }
     }
 
     // MARK: - Attention (agent alive)
 
-    private func applyAttentionHook() {
-        guard let hook = HookStore.attentionHooks().first else { return }
-        let theme = hook.theme
-        guard !theme.isEmpty else { return }
-        guard state?.themes.contains(theme) == true else { return }
-        state?.selectTheme(theme)
+    /// Picks the first sorted active agent with a matching hook theme, so the
+    /// result is deterministic when multiple agents run.
+    private func applyAttentionHook(active: Set<String>) {
+        guard let state else { return }
+        for name in active.sorted() {
+            guard let hook = HookStore.hooks(ofType: "agentAttention", matching: name)
+                .first(where: {
+                    $0.action == "breathing" && !$0.theme.isEmpty && state.themes.contains($0.theme)
+                }) else { continue }
+            state.applyOverrideTheme(hook.theme, owner: "agent")
+            return
+        }
+        state.clearOverride(owner: "agent")
     }
 
     // MARK: - Exit (agent gone)
 
-    private func fireExitHooks() {
-        for hook in HookStore.exitHooks() {
-            let action = hook.action
-            guard !action.isEmpty else { continue }
-            switch action {
-            case "flash":
-                state?.engine.flash()
-            case "breathing":
-                let theme = hook.theme
-                if !theme.isEmpty,
-                   state?.themes.contains(theme) == true {
-                    state?.selectTheme(theme)
-                }
-            default:
-                continue
-            }
-        }
-    }
-
-    // MARK: - Restore
-
-    private func restoreBase() {
-        guard let state else { return }
-        // If the engine was off before the agent ran, turn it off again.
-        if !baseEngineOn {
-            state.setEngine(false)
-            return
-        }
-        if !baseTheme.isEmpty, state.themes.contains(baseTheme) {
-            state.selectTheme(baseTheme)
-        }
+    private func fireExitHook(for agent: String) {
+        guard let state,
+              let hook = HookStore.hooks(ofType: "agentExit", matching: agent).first,
+              hook.action == "flash" else { return }
+        state.engine.flash()
     }
 }

@@ -25,6 +25,7 @@ final class SystemEventRuntime {
 
     private let workspace = NSWorkspace.shared
     private var timer: Timer?
+    private var overrideTimer: Timer?
     private var lastDownloads: Set<String> = []
     private var wasAsleep = false
     private weak var state: AppState?
@@ -32,10 +33,14 @@ final class SystemEventRuntime {
     func start(in state: AppState) {
         self.state = state
         wasAsleep = false
+        timer?.invalidate()
+        timer = nil
+        overrideTimer?.invalidate()
+        overrideTimer = nil
+        removeObservers()
         // Seed the Downloads file set so we don't flash on files that were
         // already there before KBPulse launched.
         lastDownloads = currentDownloads()
-        timer?.invalidate()
         timer = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: true) { [weak self] _ in
             self?.pollDownloads()
         }
@@ -56,9 +61,16 @@ final class SystemEventRuntime {
     func stop() {
         timer?.invalidate()
         timer = nil
+        overrideTimer?.invalidate()
+        overrideTimer = nil
+        removeObservers()
+        lastDownloads = []
+        state?.clearOverride(owner: "system")
+    }
+
+    private func removeObservers() {
         DistributedNotificationCenter.default().removeObserver(self)
         workspace.notificationCenter.removeObserver(self)
-        lastDownloads = []
     }
 
     // MARK: - Notifications
@@ -112,12 +124,24 @@ final class SystemEventRuntime {
         case "flash":
             state.engine.flash()
         case "breathing":
-            if !hook.theme.isEmpty, state.themes.contains(hook.theme) {
-                state.selectTheme(hook.theme)
-            }
+            applySystemOverride(theme: hook.theme, in: state)
         default:
             break
         }
+    }
+
+    /// Shows the hook theme for 30 s, then drops only the system layer. A newer
+    /// system override replaces the previous timer.
+    private func applySystemOverride(theme: String, in state: AppState) {
+        guard !theme.isEmpty, state.themes.contains(theme) else { return }
+        state.applyOverrideTheme(theme, owner: "system")
+        overrideTimer?.invalidate()
+        let timer = Timer(timeInterval: 30, repeats: false) { [weak self, weak state] _ in
+            state?.clearOverride(owner: "system")
+            self?.overrideTimer = nil
+        }
+        RunLoop.main.add(timer, forMode: .common)
+        overrideTimer = timer
     }
 
     /// Substring match on the trigger, case-insensitive. Empty trigger

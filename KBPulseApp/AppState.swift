@@ -3,7 +3,8 @@
 //  KBPulseApp
 //
 //  Shared state for the menu bar dropdown and Settings window: theme list,
-//  engine on/off, selected theme (persisted), plus login-item registration.
+//  engine on/off, selected theme (persisted), transient hook override, plus
+//  login-item registration.
 //
 
 import Foundation
@@ -14,10 +15,16 @@ final class AppState: ObservableObject {
     @Published var themes: [String] = []
     @Published private(set) var engineOn = true
     @Published private(set) var selectedTheme = ""
+    /// Transient hook theme layered over the persisted base theme. Never saved.
+    @Published private(set) var overrideTheme: String?
     @Published private(set) var cliInstalledPath: URL?
     @Published private(set) var cliOnPATH = false
 
     let engine = Engine()
+
+    /// Hook theme per owner (`agent`, `system`), newest application wins.
+    private var overrides: [String: String] = [:]
+    private var overrideOrder: [String] = []
 
     static let themesDir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
         .appendingPathComponent("KBPulse", isDirectory: true)
@@ -69,9 +76,12 @@ final class AppState: ObservableObject {
         if selectedTheme != saved {
             UserDefaults.standard.set(selectedTheme, forKey: "selectedTheme")
         }
+        pruneOverrides()
     }
 
     // MARK: - Bindings shared by menu and Settings window
+
+    var effectiveTheme: String { overrideTheme ?? selectedTheme }
 
     var engineBinding: Binding<Bool> {
         Binding(get: { self.engineOn }, set: { self.setEngine($0) })
@@ -98,11 +108,32 @@ final class AppState: ObservableObject {
         }
     }
 
+    /// User action: picks the persisted base theme and drops any hook override.
     func selectTheme(_ name: String) {
-        guard name != selectedTheme, themes.contains(name) else { return }
+        guard themes.contains(name) else { return }
+        guard name != selectedTheme || overrideTheme != nil else { return }
+        overrides.removeAll()
+        overrideOrder.removeAll()
+        overrideTheme = nil
         selectedTheme = name
         UserDefaults.standard.set(name, forKey: "selectedTheme")
         if engineOn { startEngine() }
+    }
+
+    /// Applies a transient hook theme. `owner` lets one hook layer clear
+    /// only its own override without disturbing another layer's.
+    func applyOverrideTheme(_ name: String, owner: String) {
+        guard themes.contains(name), overrides[owner] != name else { return }
+        overrides[owner] = name
+        overrideOrder.removeAll { $0 == owner }
+        overrideOrder.append(owner)
+        updateOverrideTheme()
+    }
+
+    func clearOverride(owner: String) {
+        guard overrides.removeValue(forKey: owner) != nil else { return }
+        overrideOrder.removeAll { $0 == owner }
+        updateOverrideTheme()
     }
 
     // MARK: - Launch at login
@@ -119,14 +150,31 @@ final class AppState: ObservableObject {
     // MARK: - Private
 
     private func startEngine() {
-        let url = Self.themesDir.appendingPathComponent("\(selectedTheme).json")
+        let url = Self.themesDir.appendingPathComponent("\(effectiveTheme).json")
         let raw = (try? ThemeStore.rawDictionary(at: url)) ?? [:]
         engine.start(profile: KBPProfile(fileURL: url), reactive: ReactiveMode(forEngine: raw))
+    }
+
+    private func updateOverrideTheme() {
+        let before = effectiveTheme
+        overrideTheme = overrideOrder.last.flatMap { overrides[$0] }
+        if engineOn, effectiveTheme != before { startEngine() }
+    }
+
+    /// Drops overrides whose theme file disappeared.
+    private func pruneOverrides() {
+        let stale = overrides.filter { !themes.contains($0.value) }.map(\.key)
+        guard !stale.isEmpty else { return }
+        for owner in stale {
+            overrides.removeValue(forKey: owner)
+            overrideOrder.removeAll { $0 == owner }
+        }
+        updateOverrideTheme()
     }
 
     /// Restarts the loop with a fresh profile after the theme file was saved.
     func themeEdited(_ name: String) {
         refreshThemes()
-        if engineOn, selectedTheme == name { startEngine() }
+        if engineOn, effectiveTheme == name { startEngine() }
     }
 }

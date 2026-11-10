@@ -14,21 +14,22 @@
 //                                 waiting for input. Backlight switches to
 //                                 its theme while it runs.
 //              "agentExit"      — a monitored agent process just exited.
-//                                 Its action fires (flash), then the base
-//                                 theme is restored.
+//                                 Supports "flash", then the base theme is
+//                                 restored.
 //              "appLaunched"    — a foreground app was launched.
 //              "appTerminated"  — an app is quitting.
 //              "wake"           — the Mac woke from sleep.
 //              "fileDownload"   — a new file appeared in Downloads.
 //    trigger  — matcher for the event.
-//              Agents: executable basename, substring match ("claude"
-//                      also catches "claude-code").
+//              Agents: executable basename, exact case-insensitive match.
 //              Apps:  bundle identifier or localised name, substring
 //                      match. Empty trigger matches anything (used by
 //                      sleep/wake, which fire for everyone).
 //    action   — engine behavior while the hook fires.
 //              "flash"   — quick brighten, fade back to rest, restore theme.
-//              "breathing" — switch to the hook theme while the agent runs.
+//                            The only action for "agentExit".
+//              "breathing" — switch to the hook theme (agent while it runs,
+//                            system event for 30 seconds).
 //    theme    — profile to switch to while the hook fires; empty string
 //               keeps the current one.
 //    enabled  — whether the hook runs.
@@ -101,15 +102,20 @@ enum HookStore {
     }
 
     /// Every trigger basename across enabled agent hooks, used to populate
-    /// the process-table scan. Substring matchers are expanded to basenames
-    /// at scan time, so we just collect the raw strings.
+    /// the process-table scan.
     static func monitoredNames() -> [String] {
-        let names = exitHooks().map(\.trigger) + attentionHooks().map(\.trigger)
+        let names = (exitHooks().map(\.trigger) + attentionHooks().map(\.trigger)).filter { !$0.isEmpty }
         return Array(Set(names)).sorted()
     }
 
     /// Hooks of one event class, used by SystemEventRuntime.
     static func hooks(ofType type: String) -> [Hook] {
         load().filter { $0.enabled && $0.hookType == type }
+    }
+
+    /// Hooks of one event class whose trigger matches `name` exactly,
+    /// ignoring case. Agent triggers are executable basenames.
+    static func hooks(ofType type: String, matching name: String) -> [Hook] {
+        hooks(ofType: type).filter { $0.trigger.caseInsensitiveCompare(name) == .orderedSame }
     }
 }
