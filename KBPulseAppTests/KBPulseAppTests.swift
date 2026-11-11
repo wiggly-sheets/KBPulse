@@ -6,7 +6,7 @@
 //
 
 import XCTest
-@testable import KBPulseApp
+@testable import KBPulse
 
 final class KBPulseAppTests: XCTestCase {
 
