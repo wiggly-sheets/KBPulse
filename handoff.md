@@ -22,7 +22,7 @@
 - Unknown profiles: logged and no-op
 - App not running: prints error, exit 1
 
-**Status:** Complete. See commits 477b1c2 and 6ec6e39 for integration details.
+**Status:** Complete. See commits 11ca83f, 477b1c2, and 6ec6e39 for integration details.
 
 ### XCTest Target Integration (RESOLVED)
 Test file `KBPulseAppTests/KBPulseAppTests.swift` integrated into Xcode project via commit 6ec6e39. Target `KBPulseAppTests` created as unit-test bundle with proper `TEST_HOST` referencing KBPulseApp. All 13 tests pass.
@@ -46,8 +46,9 @@ xcodebuild -project KBPulse.xcodeproj -scheme KBPulse -configuration Debug build
 
 ## Git History
 
-Last 9 commits:
+Last 10 commits:
 ```
+11ca83f Add CLI set/flash/off commands via distributed notifications
 6ec6e39 Integrate XCTest target and default missing Hook fields on decode
 a2f3399 Finalize Tier B implementation
 09d5fe5 Tier B enhancements: drag-and-drop hooks, reactive toggle, CLI framework
