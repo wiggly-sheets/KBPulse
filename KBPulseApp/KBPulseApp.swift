@@ -13,10 +13,8 @@ struct KBPulseApp: App {
         MenuBarExtra {
             MenuContent(state: state)
         } label: {
-            Image("LOGO")
-                .resizable()
-                .renderingMode(.template)
-                .frame(width: 16, height: 16)
+            Image(systemName: "􀇮")
+                .foregroundStyle(.primary)
         }
         .menuBarExtraStyle(.menu)
 
