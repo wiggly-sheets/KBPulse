@@ -62,6 +62,17 @@ struct SettingsView: View {
                 ForEach(state.themes, id: \.self) { Text($0).tag($0) }
             }
             CLIView(state: state)
+            Section("Display") {
+                Picker("Icon display", selection: $state.iconDisplayMode) {
+                    ForEach(AppState.IconDisplayMode.allCases) {
+                        Text($0.description)
+                    }
+                }
+                .pickerStyle(.menu)
+                Text("Choose how to display icons: dock, menu bar, both, or neither.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
         }
         .formStyle(.grouped)
         .onAppear { state.refreshThemes() }

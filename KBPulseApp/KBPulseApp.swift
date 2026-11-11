@@ -2,24 +2,62 @@
 //  KBPulseApp.swift
 //  KBPulseApp
 //
+//
 
 import SwiftUI
+import AppKit
 
 @main
 struct KBPulseApp: App {
     @StateObject private var state = AppState()
+    @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
 
     var body: some Scene {
-        MenuBarExtra {
-            MenuContent(state: state)
-        } label: {
-            Image(systemName: "light.max")
-                .foregroundStyle(.primary)
+        if state.iconDisplayMode.showsMenuBar {
+            MenuBarExtra {
+                MenuContent(state: state)
+            } label: {
+                Image(systemName: "light.max")
+                    .foregroundStyle(.primary)
+            }
+            .menuBarExtraStyle(.menu)
+        } else {
+            Empty()
         }
-        .menuBarExtraStyle(.menu)
 
         Settings {
             SettingsView(state: state)
+        }
+    }
+}
+
+class AppDelegate: NSObject, NSApplicationDelegate {
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        updateActivationPolicy()
+        NSApp.activate(ignoringOtherApps: true)
+    }
+
+    func applicationWillResignActive(_ notification: Notification) {
+        updateActivationPolicy()
+    }
+
+    func applicationDidBecomeActive(_ notification: Notification) {
+        updateActivationPolicy()
+        DispatchQueue.main.async {
+            self.showSettingsWindow()
+        }
+    }
+
+    private func showSettingsWindow() {
+        NSApp.sendAction(Selector("showSettingsWindow:"), to: nil, from: nil)
+    }
+
+    private func updateActivationPolicy() {
+        let mode = UserDefaults.standard.string(forKey: "iconDisplayMode") ?? "menu"
+        if AppState.IconDisplayMode(rawValue: mode)?.showsDock == true {
+            NSApp.setActivationPolicy(.regular)
+        } else {
+            NSApp.setActivationPolicy(.accessory)
         }
     }
 }
@@ -39,7 +77,6 @@ struct MenuContent: View {
         ))
         Divider()
         Button("Settings…") {
-            // SettingsLink/@Environment(\.openSettings) need macOS 14; this selector works on 13.
             NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
         }
         Button("Quit KBPulse") {

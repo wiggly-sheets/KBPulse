@@ -12,6 +12,39 @@ import ServiceManagement
 import SwiftUI
 
 final class AppState: ObservableObject {
+    enum IconDisplayMode: String, CaseIterable, Identifiable {
+        case dockOnly = "dock"
+        case menuBarOnly = "menu"
+        case both = "both"
+        case none = "none"
+        
+        var id: String { rawValue }
+        var description: String {
+            switch self {
+            case .dockOnly: return "Dock only"
+            case .menuBarOnly: return "Menu bar only"
+            case .both: return "Both"
+            case .none: return "Neither"
+            }
+        }
+        var showsMenuBar: Bool {
+            switch self {
+            case .menuBarOnly, .both: return true
+            case .dockOnly, .none: return false
+            }
+        }
+        var showsDock: Bool {
+            switch self {
+            case .dockOnly, .both: return true
+            case .menuBarOnly, .none: return false
+            }
+        }
+    }
+    
+    @Published var iconDisplayMode: IconDisplayMode = .menuBarOnly {
+        didSet { UserDefaults.standard.set(iconDisplayMode.rawValue, forKey: "iconDisplayMode") }
+    }
+    
     @Published var themes: [String] = []
     @Published private(set) var engineOn = true
     @Published private(set) var selectedTheme = ""
@@ -31,8 +64,8 @@ final class AppState: ObservableObject {
 
     init() {
         KBPPulseManager.loadPrivateFrameworks()
-        NotificationCenter.default.addObserver(forName: NSApplication.willTerminateNotification, object: nil, queue: nil) { _ in
-            self.engine.stop()
+        NotificationCenter.default.addObserver(forName: NSApplication.willTerminateNotification, object: nil, queue: nil) { [weak self] _ in
+            self?.engine.stop()
             KBPPulseManager.restoreBacklightSettings()
         }
         DistributedNotificationCenter.default().addObserver(
@@ -52,6 +85,7 @@ final class AppState: ObservableObject {
         ThemeStore.createReactiveExampleIfMissing()
         let defaults = UserDefaults.standard
         engineOn = defaults.object(forKey: "engineEnabled") as? Bool ?? true
+        iconDisplayMode = IconDisplayMode(rawValue: defaults.string(forKey: "iconDisplayMode") ?? "menu") ?? .menuBarOnly
         refreshThemes()
         refreshCLIStatus()
         if engineOn {
