@@ -25,6 +25,7 @@ import Cocoa
 import CoreGraphics
 import Darwin
 import Foundation
+import MediaPlayer
 
 struct HookDiagnostics {
     var lastFired: Date?
@@ -53,6 +54,12 @@ final class SystemEventRuntime {
     private var lastIdleFire: Date?
     private var musicVolumeTimer: Timer?
     private var lastVolumeLevel: Float = 0.0
+    // Music playback monitoring
+    private var musicPlaybackTimer: Timer?
+    private var lastPlaybackState: MPNowPlayingPlaybackState = .stopped
+    private var lastTrackTitle: String = ""
+    private var lastTrackArtist: String = ""
+    private var lastTrackAlbum: String = ""
 
     func start(in state: AppState) {
         self.state = state
@@ -110,6 +117,12 @@ final class SystemEventRuntime {
         }
         // Seed last volume level
         lastVolumeLevel = SystemVolumeClient.systemOutputVolume()
+        // Poll for music playback every 2.5 s
+        musicPlaybackTimer = Timer.scheduledTimer(withTimeInterval: 2.5, repeats: true) { [weak self] _ in
+            self?.pollMusicPlayback()
+        }
+        // Seed initial music playback state
+        seedMusicPlaybackState()
     }
 
     func stop() {
@@ -125,6 +138,8 @@ final class SystemEventRuntime {
         idleTimer = nil
         musicVolumeTimer?.invalidate()
         musicVolumeTimer = nil
+        musicPlaybackTimer?.invalidate()
+        musicPlaybackTimer = nil
         removeObservers()
         lastDownloads = []
         lastFired = [:]
@@ -133,6 +148,10 @@ final class SystemEventRuntime {
         lastScreenLocked = false
         lastIdleFire = nil
         lastVolumeLevel = 0.0
+        lastPlaybackState = .stopped
+        lastTrackTitle = ""
+        lastTrackArtist = ""
+        lastTrackAlbum = ""
         state?.clearOverride(owner: "system")
     }
 
@@ -281,8 +300,25 @@ final class SystemEventRuntime {
     private func fire(hookType: String, trigger: String) {
         guard let state else { return }
         let now = Date()
-        guard let hook = HookStore.hooks(ofType: hookType)
-            .first(where: { matches($0.trigger, trigger) && cooldownElapsed($0, now: now) }) else { return }
+        
+        // Special handling for musicPlayback: trigger format is "bundleID:eventType"
+        // Hook trigger is bundle ID (or empty for any). Match bundle ID portion.
+        let hooks = HookStore.hooks(ofType: hookType)
+        guard let hook = hooks.first(where: { hook in
+            let matchesTrigger: Bool
+            if hookType == "musicPlayback" {
+                // Parse bundle ID from trigger (format: "bundleID:eventType")
+                let components = trigger.split(separator: ":", maxSplits: 1, omittingEmptySubsequences: false)
+                let eventBundleID = components.isEmpty ? "" : String(components[0])
+                let hookTrigger = hook.trigger.trimmingCharacters(in: .whitespaces)
+                // Empty hook trigger matches any bundle ID
+                matchesTrigger = hookTrigger.isEmpty || hookTrigger.caseInsensitiveCompare(eventBundleID) == .orderedSame
+            } else {
+                matchesTrigger = matches(hook.trigger, trigger)
+            }
+            return matchesTrigger && cooldownElapsed(hook, now: now)
+        }) else { return }
+        
         let allowed = HookStore.allowedActions(for: hookType)
         guard allowed.contains(hook.action) else { return }
         switch hook.action {
@@ -324,6 +360,73 @@ final class SystemEventRuntime {
         RunLoop.main.add(timer, forMode: .common)
         overrideTimer = timer
         return true
+    }
+
+    // MARK: - Music playback polling
+
+    private func seedMusicPlaybackState() {
+        let info = MPNowPlayingInfoCenter.default().nowPlayingInfo
+        // Try to get initial playback state from nowPlayingInfo
+        if let state = info?[MPNowPlayingInfoPropertyPlaybackRate] as? NSNumber {
+            lastPlaybackState = state.doubleValue > 0 ? .playing : .paused
+        } else {
+            lastPlaybackState = .stopped
+        }
+        lastTrackTitle = info?[MPMediaItemPropertyTitle] as? String ?? ""
+        lastTrackArtist = info?[MPMediaItemPropertyArtist] as? String ?? ""
+        lastTrackAlbum = info?[MPMediaItemPropertyAlbumTitle] as? String ?? ""
+    }
+
+    private func pollMusicPlayback() {
+        guard let state else { return }
+        let info = MPNowPlayingInfoCenter.default().nowPlayingInfo
+
+        // Get current playback state
+        var currentState: MPNowPlayingPlaybackState = .stopped
+        if let rate = info?[MPNowPlayingInfoPropertyPlaybackRate] as? NSNumber {
+            currentState = rate.doubleValue > 0 ? .playing : .paused
+        }
+
+        // Get current track metadata
+        let currentTitle = info?[MPMediaItemPropertyTitle] as? String ?? ""
+        let currentArtist = info?[MPMediaItemPropertyArtist] as? String ?? ""
+        let currentAlbum = info?[MPMediaItemPropertyAlbumTitle] as? String ?? ""
+
+        // Check for playback state change
+        let stateChanged = currentState != lastPlaybackState && lastPlaybackState != .stopped && currentState != .stopped
+
+        // Check for track change
+        let trackChanged = currentTitle != lastTrackTitle || currentArtist != lastTrackArtist || currentAlbum != lastTrackAlbum
+
+        // Fire hooks for state change or track change
+        if stateChanged || trackChanged {
+            // Get bundle ID of the current media app from now playing info
+            var bundleID = ""
+            if let currentArtist = info?[MPMediaItemPropertyArtist] as? String {
+                bundleID = findBundleID(for: currentArtist)
+            }
+
+            let triggerValue = stateChanged ? "\(lastPlaybackState.rawValue)->\(currentState.rawValue)" : "trackChange"
+            let fullTrigger = "\(bundleID):\(triggerValue)"
+
+            fire(hookType: "musicPlayback", trigger: fullTrigger)
+        }
+
+        // Update last known state
+        lastPlaybackState = currentState
+        lastTrackTitle = currentTitle
+        lastTrackArtist = currentArtist
+        lastTrackAlbum = currentAlbum
+    }
+
+    private func findBundleID(for appName: String) -> String {
+        let runningApps = NSWorkspace.shared.runningApplications
+        for app in runningApps {
+            if app.localizedName?.localizedCaseInsensitiveContains(appName) == true {
+                return app.bundleIdentifier ?? ""
+            }
+        }
+        return ""
     }
 
     /// Empty trigger matches anything (used by sleep/wake, which fire for

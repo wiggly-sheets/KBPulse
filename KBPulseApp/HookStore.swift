@@ -162,7 +162,23 @@ enum HookStore {
         "agentAttention", "agentExit", "appLaunched",
         "appTerminated", "wake", "fileDownload",
         "appFrontmost", "screenLock", "screenUnlock", "idleThreshold",
-        "musicVolume",
+        "musicVolume", "musicPlayback",
+    ]
+
+    /// User-friendly display names for hook types.
+    static let hookTypeDisplayNames: [String: String] = [
+        "agentAttention": "Agent Attention",
+        "agentExit": "Agent Exit",
+        "appLaunched": "App Launched",
+        "appTerminated": "App Terminated",
+        "wake": "Wake from Sleep",
+        "fileDownload": "File Downloaded",
+        "appFrontmost": "App Became Frontmost",
+        "screenLock": "Screen Locked",
+        "screenUnlock": "Screen Unlocked",
+        "idleThreshold": "Idle Threshold Reached",
+        "musicVolume": "Volume Changed",
+        "musicPlayback": "Playback Changed",
     ]
 
     /// All supported actions.
@@ -173,7 +189,7 @@ enum HookStore {
         switch hookType {
         case "agentAttention": return ["breathing"]
         case "agentExit": return ["flash", "pulse", "hold", "fade"]
-        case "appFrontmost", "screenLock", "screenUnlock", "idleThreshold", "musicVolume": return actions
+        case "appFrontmost", "screenLock", "screenUnlock", "idleThreshold", "musicVolume", "musicPlayback": return actions
         default: return actions
         }
     }
@@ -231,6 +247,11 @@ enum HookStore {
                     return "Music volume trigger must be a number between 0 and 100, or empty for off."
                 }
             }
+        }
+        if hook.hookType == "musicPlayback" {
+            // Trigger is optional bundle ID for filtering (empty = any media app)
+            let trigger = hook.trigger.trimmingCharacters(in: .whitespaces)
+            // No validation needed - empty or bundle ID are both valid
         }
         if hook.action == "breathing" {
             guard !hook.theme.isEmpty else {
