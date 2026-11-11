@@ -65,7 +65,7 @@ struct SettingsView: View {
             Section("Display") {
                 Picker("Icon display", selection: $state.iconDisplayMode) {
                     ForEach(AppState.IconDisplayMode.allCases) {
-                        Text($0.description)
+                        Text($0.description).tag($0)
                     }
                 }
                 .pickerStyle(.menu)

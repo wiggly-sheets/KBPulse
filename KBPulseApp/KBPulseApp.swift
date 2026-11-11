@@ -29,8 +29,17 @@ struct KBPulseApp: App {
         .windowStyle(.hiddenTitleBar)
         .defaultSize(width: 640, height: 400)
 
-        // Menu bar scene
-        MenuBarScene(state: state)
+        // MenuBarExtra labels do not re-render from observed state, so the
+        // status item is inserted or removed through this binding instead.
+        MenuBarExtra(isInserted: Binding(
+            get: { state.iconDisplayMode.showsMenuBar },
+            set: { _ in } // The mode is the source of truth; ignore system-side removal.
+        )) {
+            MenuContent(state: state)
+        } label: {
+            Image(systemName: "light.max")
+        }
+        .menuBarExtraStyle(.menu)
     }
 }
 
@@ -51,29 +60,6 @@ extension View {
         self
             .frame(minWidth: 0, minHeight: 0)
             .padding(0)
-    }
-}
-
-// MARK: - MenuBarScene
-
-private struct MenuBarScene: Scene {
-    @ObservedObject var state: AppState
-
-    var body: some Scene {
-        MenuBarExtra {
-            MenuContent(state: state)
-        } label: {
-            if state.iconDisplayMode.showsMenuBar {
-                Image(systemName: "light.max")
-                    .foregroundStyle(.primary)
-            } else {
-                // Invisible menu bar item - still present but not visible
-                Image(systemName: "light.max")
-                    .foregroundStyle(.clear)
-                    .frame(width: 0, height: 0)
-            }
-        }
-        .menuBarExtraStyle(.menu)
     }
 }
 

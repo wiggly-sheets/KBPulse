@@ -43,9 +43,9 @@ final class AppState: ObservableObject {
     }
     
     @Published var iconDisplayMode: IconDisplayMode = .menuBarOnly {
-        didSet { 
+        didSet {
             UserDefaults.standard.set(iconDisplayMode.rawValue, forKey: "iconDisplayMode")
-            NSApp.setActivationPolicy(iconDisplayMode.showsDock ? .regular : .accessory)
+            applyActivationPolicy()
         }
     }
 
@@ -86,6 +86,10 @@ final class AppState: ObservableObject {
 
     init() {
         KBPPulseManager.loadPrivateFrameworks()
+        NotificationCenter.default.addObserver(forName: NSApplication.didFinishLaunchingNotification, object: nil, queue: .main) { [weak self] _ in
+            // Activation policy cannot be set reliably before the app launches.
+            self?.applyActivationPolicy()
+        }
         NotificationCenter.default.addObserver(forName: NSApplication.willTerminateNotification, object: nil, queue: nil) { [weak self] _ in
             self?.engine.stop()
             KBPPulseManager.restoreBacklightSettings()
@@ -260,6 +264,13 @@ final class AppState: ObservableObject {
     }
 
     // MARK: - Private
+
+    /// Applies dock visibility for the current mode. Call on the main thread.
+    private func applyActivationPolicy() {
+        let policy: NSApplication.ActivationPolicy = iconDisplayMode.showsDock ? .regular : .accessory
+        guard NSApp.activationPolicy() != policy else { return }
+        NSApp.setActivationPolicy(policy)
+    }
 
     private func startEngine() {
         let url = Self.themesDir.appendingPathComponent("\(effectiveTheme).json")

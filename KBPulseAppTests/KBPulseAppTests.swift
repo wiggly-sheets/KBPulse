@@ -301,6 +301,18 @@ final class KBPulseAppTests: XCTestCase {
         XCTAssertFalse(AppState.IconDisplayMode.none.showsDock)
     }
 
+    func testAppStateIconDisplayModeRawValues() {
+        // Raw values are the persisted UserDefaults format; changing one breaks saved settings.
+        XCTAssertEqual(AppState.IconDisplayMode.dockOnly.rawValue, "dock")
+        XCTAssertEqual(AppState.IconDisplayMode.menuBarOnly.rawValue, "menu")
+        XCTAssertEqual(AppState.IconDisplayMode.both.rawValue, "both")
+        XCTAssertEqual(AppState.IconDisplayMode.none.rawValue, "none")
+
+        // Mistyped names must not resolve to a mode.
+        XCTAssertNil(AppState.IconDisplayMode(rawValue: "menuBarOnly"))
+        XCTAssertNil(AppState.IconDisplayMode(rawValue: "dockOnly"))
+    }
+
     func testAppStateActiveAgentsPublishes() {
         // AppState.init() calls updateAgentDetection() which scans the process table.
         // Agents (codex, opencode, etc.) may be detected - verify the property is properly initialized.
