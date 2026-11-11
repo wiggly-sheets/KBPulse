@@ -94,6 +94,41 @@ final class ThemeDoc: ObservableObject {
         }
         try ThemeStore.write(dict, to: url)
     }
+    
+    func validate() -> String? {
+        if name.trimmingCharacters(in: .whitespaces).isEmpty {
+            return "Theme name is required"
+        }
+        if animations.isEmpty && !hasReactive {
+            return "At least one animation or reactive mode is required"
+        }
+        for (i, anim) in animations.enumerated() {
+            if anim.name.trimmingCharacters(in: .whitespaces).isEmpty {
+                return "Animation \(i + 1) needs a name"
+            }
+            if anim.brightness < 0 || anim.brightness > 1 {
+                return "Animation \(i + 1) brightness must be 0-1"
+            }
+            if anim.fade < 0 {
+                return "Animation \(i + 1) fade duration must be ≥ 0"
+            }
+            if anim.delay < 0 {
+                return "Animation \(i + 1) delay must be ≥ 0"
+            }
+        }
+        if hasReactive {
+            if reactive.bump < 0 || reactive.bump > 1 {
+                return "Reactive bump must be 0-1"
+            }
+            if reactive.decay < 0 {
+                return "Reactive decay must be ≥ 0"
+            }
+            if reactive.floor < 0 || reactive.floor > 1 {
+                return "Reactive floor must be 0-1"
+            }
+        }
+        return nil
+    }
 }
 
 struct ThemesTab: View {
@@ -104,6 +139,7 @@ struct ThemesTab: View {
     @State private var showDuplicate = false
     @State private var message: String?
     @State private var permissionGranted = ReactiveEngine.isAccessibilityGranted(prompt: false)
+    @State private var showBrightnessCurve = false
 
     var body: some View {
         Form {
@@ -113,6 +149,7 @@ struct ThemesTab: View {
                 }
                 HStack {
                     TextField("Name for the copy", text: $newName)
+                        .lineLimit(nil)
                     Button("Duplicate") { showDuplicate = true }
                         .disabled(selected.isEmpty || newName.trimmingCharacters(in: .whitespaces).isEmpty)
                 }
@@ -125,49 +162,78 @@ struct ThemesTab: View {
             }
             Section("Details") {
                 TextField("Name", text: $doc.name)
+                    .lineLimit(nil)
                 TextField("Description", text: $doc.comment)
+                    .lineLimit(nil)
             }
             Section("Animations") {
                 if doc.animations.isEmpty {
-                    Text("This theme has no animations.").foregroundColor(.secondary)
+                    Text("This theme has no animations.")
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
                 ForEach($doc.animations) { $anim in
-                    VStack(alignment: .leading, spacing: 6) {
-                        TextField("Animation name", text: $anim.name).font(.headline)
-                        doubleField("Brightness", $anim.brightness)
+                    VStack(alignment: .leading, spacing: 8) {
+                        TextField("Animation name", text: $anim.name)
+                            .font(.headline)
+                            .lineLimit(nil)
+                        doubleField("Brightness (0-1)", $anim.brightness)
                         intField("Fade Duration (ms)", $anim.fade)
                         intField("Delay (ms)", $anim.delay)
                     }
-                    .padding(.vertical, 2)
+                    .padding(.vertical, 4)
+                    .padding(.horizontal, 8)
+                    .background(RoundedRectangle(cornerRadius: 6).fill(.quaternary.opacity(0.3)))
                 }
+                Button("Add animation") {
+                    doc.animations.append(ThemeDoc.AnimDoc(name: "New Animation", comment: "", brightness: 0.5, fade: 500, delay: 0))
+                }
+                .buttonStyle(.bordered)
+                .help("Adds a new animation to the end of the list")
             }
-            Section("Preview") {
-                Button("Test this theme (10s)") {
-                    let url = AppState.themesDir.appendingPathComponent("\(selected).json")
-                    state.engine.stop()
-                    let profile = KBPProfile(fileURL: url)
-                    state.engine.start(profile: profile, reactive: doc.reactive.enabled ? doc.reactive : nil)
+            Section("Live Preview") {
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack {
+                        Button("Test this theme (10s)") {
+                            let url = AppState.themesDir.appendingPathComponent("\(selected).json")
+                            state.engine.stop()
+                            let profile = KBPProfile(fileURL: url)
+                            state.engine.start(profile: profile, reactive: doc.reactive.enabled ? doc.reactive : nil)
+                        }
+                        .disabled(selected.isEmpty || (doc.animations.isEmpty && !doc.hasReactive))
+                        Button("Show brightness curve") { showBrightnessCurve.toggle() }
+                            .buttonStyle(.bordered)
+                    }
+                    if showBrightnessCurve {
+                        BrightnessCurveView(animations: doc.animations)
+                            .frame(height: 150)
+                            .padding(.vertical, 8)
+                    }
+                    Text("Temporarily applies the theme for 10 seconds.")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
-                .disabled(selected.isEmpty || doc.animations.isEmpty)
-                Text("Temporarily applies the theme for 10 seconds.")
-                    .font(.footnote)
-                    .foregroundColor(.secondary)
             }
             Section("Typing reactions") {
                 Toggle("Typing reactions", isOn: $doc.hasReactive)
                 if doc.hasReactive {
                     Toggle("Enabled", isOn: $doc.reactive.enabled)
-                    doubleField("Bump", $doc.reactive.bump)
+                    doubleField("Bump (0-1)", $doc.reactive.bump)
                     intField("Decay Duration (ms)", $doc.reactive.decay)
-                    doubleField("Resting brightness", $doc.reactive.floor)
-                    doubleField("Space bump", $doc.reactive.spaceBump)
-                    doubleField("Enter bump", $doc.reactive.enterBump)
-                    doubleField("Modifier bump", $doc.reactive.modifierBump)
+                    doubleField("Resting brightness (0-1)", $doc.reactive.floor)
+                    doubleField("Space bump (0-1)", $doc.reactive.spaceBump)
+                    doubleField("Enter bump (0-1)", $doc.reactive.enterBump)
+                    doubleField("Modifier bump (0-1)", $doc.reactive.modifierBump)
                     Text("While enabled, this theme reacts to keystrokes instead of running its animation loop.")
-                        .font(.footnote).foregroundColor(.secondary)
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
                 } else {
                     Text("Reacts to keystrokes instead of running the animation loop. Save removes this section when toggled off.")
-                        .font(.footnote).foregroundColor(.secondary)
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
             }
             if doc.hasReactive {
@@ -176,13 +242,23 @@ struct ThemesTab: View {
                         Text("Keystroke access")
                         Spacer()
                         Text(permissionGranted ? "Granted" : "Required")
-                            .foregroundColor(permissionGranted ? .secondary : .orange)
+                            .foregroundStyle(permissionGranted ? Color.secondary : Color.yellow)
                     }
                     if !permissionGranted {
                         Button("Enable typing reactions") { openAccessibilitySettings() }
                         Text("Typing-reactive themes need Accessibility permission to observe keystrokes. Without it they rest at zero brightness.")
-                            .font(.footnote).foregroundColor(.secondary)
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
                     }
+                }
+            }
+            // Validation status
+            if let validationError = doc.validate() {
+                Section("Validation") {
+                    Text(validationError)
+                        .foregroundStyle(.red)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
             }
         }
@@ -247,6 +323,10 @@ struct ThemesTab: View {
     }
 
     private func save() {
+        if let validationError = doc.validate() {
+            message = validationError
+            return
+        }
         do {
             try doc.save(to: AppState.themesDir.appendingPathComponent("\(selected).json"))
             state.themeEdited(selected)
@@ -314,5 +394,86 @@ struct ThemesTab: View {
             NSWorkspace.shared.open(url)
         }
         permissionGranted = ReactiveEngine.isAccessibilityGranted(prompt: false)
+    }
+}
+
+private struct BrightnessCurveView: View {
+    let animations: [ThemeDoc.AnimDoc]
+
+    var body: some View {
+        GeometryReader { geometry in
+            let width = geometry.size.width
+            let height = geometry.size.height
+            let totalDuration = max(animations.reduce(0) { $0 + $1.fade + $1.delay }, 1)
+            
+            ZStack {
+                // Background grid
+                Path { path in
+                    for i in 0...4 {
+                        let y = height * CGFloat(i) / 4
+                        path.move(to: CGPoint(x: 0, y: y))
+                        path.addLine(to: CGPoint(x: width, y: y))
+                    }
+                    for i in 0...10 {
+                        let x = width * CGFloat(i) / 10
+                        path.move(to: CGPoint(x: x, y: 0))
+                        path.addLine(to: CGPoint(x: x, y: height))
+                    }
+                }
+                .stroke(Color.gray.opacity(0.2), lineWidth: 0.5)
+
+                // Brightness curve
+                Path { path in
+                    var currentTime = 0
+                    var x: CGFloat = 0
+                    var y = height * (1 - CGFloat(animations.first?.brightness ?? 0))
+                    path.move(to: CGPoint(x: x, y: y))
+
+                    for anim in animations {
+                        // Delay segment (flat)
+                        if anim.delay > 0 {
+                            let delayX = width * CGFloat(anim.delay) / CGFloat(totalDuration)
+                            x += delayX
+                            path.addLine(to: CGPoint(x: x, y: y))
+                        }
+
+                        // Fade segment (ramp to brightness)
+                        if anim.fade > 0 {
+                            let fadeX = width * CGFloat(anim.fade) / CGFloat(totalDuration)
+                            x += fadeX
+                            y = height * (1 - CGFloat(anim.brightness))
+                            path.addLine(to: CGPoint(x: x, y: y))
+                        }
+                    }
+                }
+                .stroke(Color.accentColor, lineWidth: 2)
+
+                // Key points
+                let keyPoints: [(x: CGFloat, y: CGFloat)] = {
+                    var points: [(CGFloat, CGFloat)] = []
+                    var currentTime = 0
+                    for i in animations.indices {
+                        let anim = animations[i]
+                        var x: CGFloat = 0
+                        for j in 0..<i {
+                            currentTime += animations[j].delay + animations[j].fade
+                        }
+                        currentTime += anim.delay
+                        x = width * CGFloat(currentTime) / CGFloat(totalDuration)
+                        let y = height * (1 - CGFloat(anim.brightness))
+                        points.append((x, y))
+                    }
+                    return points
+                }()
+                ForEach(keyPoints.indices, id: \.self) { i in
+                    let point = keyPoints[i]
+                    Circle()
+                        .fill(Color.accentColor)
+                        .frame(width: 8, height: 8)
+                        .position(x: point.x, y: point.y)
+                }
+            }
+        }
+        .background(RoundedRectangle(cornerRadius: 6).fill(Color(NSColor.controlBackgroundColor)))
     }
 }

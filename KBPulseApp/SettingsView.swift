@@ -52,7 +52,7 @@ struct SettingsView: View {
             HooksTab(state: state)
                 .tabItem { Label("Hooks", systemImage: "bolt") }
         }
-        .frame(width: 520)
+        .frame(width: 640)
     }
 
     private var general: some View {
@@ -72,6 +72,47 @@ struct SettingsView: View {
                 Text("Choose how to display icons: dock, menu bar, both, or neither.")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Section("Accessibility & Runtime") {
+                HStack {
+                    Label("Accessibility (key events)", systemImage: "accessibility")
+                    Spacer()
+                    if state.isAccessibilityGranted {
+                        Image(systemName: "checkmark.circle.fill")
+                            .foregroundStyle(.green)
+                            .help("Permission granted — keyboard bumps are active")
+                    } else {
+                        Image(systemName: "xmark.circle.fill")
+                            .foregroundStyle(.red)
+                            .help("Permission required for typing-reactive mode")
+                        Button("Open Privacy Settings…") {
+                            NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")!)
+                        }
+                    }
+                }
+                HStack {
+                    Label("Active agents", systemImage: "terminal")
+                    Spacer()
+                    if !state.activeAgents.isEmpty {
+                        ForEach(state.activeAgents, id: \.self) { agent in
+                            Text(agent)
+                                .font(.caption)
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 3)
+                                .background(Capsule().fill(.quaternary))
+                                .foregroundStyle(.primary)
+                        }
+                    } else if state.activeAgents.isEmpty {
+                        Image(systemName: "ellipsis.circle")
+                            .foregroundStyle(.secondary)
+                            .help("No agents detected")
+                    } else {
+                        Image(systemName: "questionmark.circle")
+                            .foregroundStyle(.secondary)
+                            .help("Scan unavailable")
+                    }
+                }
             }
         }
         .formStyle(.grouped)
@@ -94,10 +135,12 @@ private struct CLIView: View {
                 Text("`kbpulse` is on PATH.")
                     .font(.footnote)
                     .foregroundStyle(.green)
+                    .fixedSize(horizontal: false, vertical: true)
             } else {
                 Text("`kbpulse` is not on PATH.")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
             if state.cliInstalledPath == nil {
                 Button("Install kbpulse to ~/.local/bin") {
@@ -111,12 +154,51 @@ private struct CLIView: View {
             Text("The CLI runs the same engine as the app. Use it for scripts, launchers, keyboard shortcuts.")
                 .font(.footnote)
                 .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
         }
     }
 
     private var installedLabel: String {
         guard let path = state.cliInstalledPath else { return "not installed" }
         return path.path.replacingOccurrences(of: NSHomeDirectory(), with: "~")
+    }
+}
+
+// MARK: - Hook type categories
+
+private enum HookCategory: String, CaseIterable {
+    case agent = "Agent"
+    case system = "System"
+    case media = "Media"
+
+    static func category(for hookType: String) -> HookCategory {
+        switch hookType {
+        case "agentAttention", "agentExit":
+            return .agent
+        case "appLaunched", "appTerminated", "wake", "fileDownload",
+             "appFrontmost", "screenLock", "screenUnlock", "idleThreshold":
+            return .system
+        case "musicVolume", "musicPlayback":
+            return .media
+        default:
+            return .system
+        }
+    }
+
+    var systemImage: String {
+        switch self {
+        case .agent: return "terminal.fill"
+        case .system: return "gearshape.fill"
+        case .media: return "music.note"
+        }
+    }
+
+    var color: Color {
+        switch self {
+        case .agent: return .blue
+        case .system: return .purple
+        case .media: return .orange
+        }
     }
 }
 
@@ -136,16 +218,28 @@ private struct HooksTab: View {
                 if hooks.isEmpty && !loadFailed {
                     Text("No hooks configured. Add one below; the file is created if needed.")
                         .font(.footnote)
-                        .foregroundColor(.secondary)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
-                ForEach(Array(hooks.enumerated()), id: \.offset) { index, hook in
-                    row(index: index, hook: hook)
-                        .onDrag {
-                            NSItemProvider(object: "\(index)" as NSString)
+                ForEach(HookCategory.allCases, id: \.self) { category in
+                    let categoryHooks = hooksForCategory(category)
+                    if !categoryHooks.isEmpty {
+                        Section {
+                            ForEach(categoryHooks, id: \.0) { globalIndex, hook in
+                                row(globalIndex: globalIndex, hook: hook)
+                                    .onDrag {
+                                        NSItemProvider(object: "\(globalIndex)" as NSString)
+                                    }
+                                    .onDrop(of: [.text], isTargeted: nil) { providers in
+                                        handleDrop(from: providers, toIndex: globalIndex)
+                                    }
+                            }
+                        } header: {
+                            Label(category.rawValue, systemImage: category.systemImage)
+                                .foregroundStyle(category.color)
+                                .font(.subheadline.weight(.medium))
                         }
-                        .onDrop(of: [.text], isTargeted: nil) { providers in
-                            handleDrop(from: providers, toIndex: index)
-                        }
+                    }
                 }
                 if !hooks.isEmpty {
                     Button("Reload") { load() }
@@ -155,14 +249,16 @@ private struct HooksTab: View {
             if let error {
                 Text(error)
                     .font(.footnote)
-                    .foregroundColor(.red)
+                    .foregroundStyle(.red)
+                    .fixedSize(horizontal: false, vertical: true)
             }
             Section {
                 Button("Add hook") { add() }
                     .disabled(loadFailed)
                 Text("Default hooks are created automatically on first launch. The file lives at ~/Documents/KBPulse/hooks.json and the runtime reads it fresh.")
                     .font(.footnote)
-                    .foregroundColor(.secondary)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
         .formStyle(.grouped)
@@ -180,6 +276,12 @@ private struct HooksTab: View {
                     onDelete: deleteDraft
                 )
             }
+        }
+    }
+
+    private func hooksForCategory(_ category: HookCategory) -> [(Int, Hook)] {
+        hooks.enumerated().filter { _, hook in
+            HookCategory.category(for: hook.hookType) == category
         }
     }
 
@@ -206,59 +308,71 @@ private struct HooksTab: View {
 
     // MARK: - Rows
 
-    private func row(index: Int, hook: Hook) -> some View {
-        HStack(spacing: 8) {
+    private func row(globalIndex: Int, hook: Hook) -> some View {
+        HStack(spacing: 12) {
             Image(systemName: "line.3.horizontal")
-                .foregroundColor(.secondary)
+                .foregroundStyle(.secondary)
                 .help("Drag to reorder")
                 .accessibilityLabel("Reorder hook")
-            Toggle("", isOn: enabledBinding(index))
+            Toggle("", isOn: enabledBinding(globalIndex))
                 .labelsHidden()
                 .disabled(loadFailed)
                 .accessibilityLabel("Enable \(hook.hookType) hook")
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: 3) {
                 Text(hook.hookType)
+                    .font(.subheadline)
+                    .fixedSize(horizontal: false, vertical: true)
                 Text(hook.trigger.isEmpty ? "any" : hook.trigger)
                     .font(.caption)
-                    .foregroundColor(.secondary)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
             Spacer()
             Text(hook.action)
+                .font(.subheadline)
+                .fixedSize(horizontal: false, vertical: true)
             Text(hook.theme.isEmpty ? "none" : hook.theme)
-                .foregroundColor(.secondary)
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
             if !HookStore.isAgentType(hook.hookType),
                let cooldown = hook.cooldown, cooldown > 0 {
                 Text(cooldownLabel(cooldown))
-                    .foregroundColor(.secondary)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
             if let d = mergedDiagnostics(for: hook) {
                 if let lastFired = d.lastFired {
                     Text(timeSince(lastFired))
                         .font(.caption)
-                        .foregroundColor(.secondary)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
                 } else {
                     Text("never")
                         .font(.caption)
-                        .foregroundColor(.secondary)
+                        .foregroundStyle(.secondary)
                 }
                 if d.skipped > 0 {
                     Text("skipped \(d.skipped)×")
                         .font(.caption)
-                        .foregroundColor(.secondary)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
             }
-            Button("Edit") { edit(index) }
+            Button("Edit") { edit(globalIndex) }
                 .disabled(loadFailed)
         }
+        .padding(.vertical, 4)
     }
 
-    private func enabledBinding(_ index: Int) -> Binding<Bool> {
+    private func enabledBinding(_ globalIndex: Int) -> Binding<Bool> {
         Binding(
-            get: { hooks.indices.contains(index) ? hooks[index].enabled : false },
+            get: { hooks.indices.contains(globalIndex) ? hooks[globalIndex].enabled : false },
             set: { enabled in
-                guard hooks.indices.contains(index) else { return }
+                guard hooks.indices.contains(globalIndex) else { return }
                 var updated = hooks
-                updated[index].enabled = enabled
+                updated[globalIndex].enabled = enabled
                 _ = persist(updated)
             }
         )
@@ -423,10 +537,42 @@ private struct HookEditor: View {
                 }
             }
             TextField("Trigger", text: $draft.trigger)
+                .lineLimit(nil)
             if draft.hookType == "agentAttention" || draft.hookType == "agentExit" {
                 Text("Executable name, for example claude or codex. Case-insensitive.")
                     .font(.footnote)
-                    .foregroundColor(.secondary)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            if draft.hookType == "musicPlayback" {
+                Text("Optional bundle ID to filter by media app (e.g., com.apple.Music). Empty = any media app.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            if draft.hookType == "appFrontmost" {
+                Text("Bundle ID, app name, or glob pattern. Empty = any app.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            if draft.hookType == "fileDownload" {
+                Text("Filename or glob pattern (e.g., *.zip). Empty = any download.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            if draft.hookType == "idleThreshold" {
+                Text("Seconds (e.g., 300). Empty = default 300s.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            if draft.hookType == "musicVolume" {
+                Text("Volume threshold 0-100. Empty = disabled.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
             Picker("Action", selection: $draft.action) {
                 ForEach(HookStore.allowedActions(for: draft.hookType), id: \.self) { action in
@@ -440,13 +586,15 @@ private struct HookEditor: View {
             if !HookStore.isAgentType(draft.hookType) {
                 Stepper(value: cooldown, in: 0...3600, step: 1) {
                     Text("Cooldown: \(cooldownLabel(min(max(draft.cooldown ?? 0, 0), 3600)))")
+                        .fixedSize(horizontal: false, vertical: true)
                 }
             }
             Toggle("Enabled", isOn: $draft.enabled)
             if let error {
                 Text(error)
                     .font(.footnote)
-                    .foregroundColor(.red)
+                    .foregroundStyle(.red)
+                    .fixedSize(horizontal: false, vertical: true)
             }
             Section {
                 HStack {
@@ -475,7 +623,7 @@ private struct HookEditor: View {
             }
         }
         .formStyle(.grouped)
-        .frame(width: 420)
+        .frame(width: 520)
     }
 
     /// Zero in the UI means "no cooldown" in the file.
