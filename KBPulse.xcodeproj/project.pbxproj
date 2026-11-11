@@ -35,20 +35,6 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXShellScriptBuildPhase section */
-		4F9B00000000000000000024 /* ShellScript */ = {
-			isa = PBXShellScriptBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			inputPaths = (
-			);
-			outputPaths = (
-				$BUILT_PRODUCTS_DIR/KBPulse.app/Contents/MacOS/kbpulse,
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-			shellPath = /bin/sh;
-			shellScript = "#!/bin/sh\n# Create a symlink to the CLI binary inside the app bundle so it stays reachable.\nset -eu\nif [ \"$TARGET_NAME\" != \"KBPulse\" ]; then\n  exit 0\nfi\nCLI=\"$BUILT_PRODUCTS_DIR/KBPulse\"\nDEST=\"$BUILT_PRODUCTS_DIR/KBPulse.app/Contents/MacOS/kbpulse\"\nif [ ! -f \"$CLI\" ]; then\n  echo \"kbpulse: CLI binary not found at $CLI; skipping symlink\"\n  exit 0\nfi\nmkdir -p \"$(dirname \"$DEST\")\"\nln -sf \"$CLI\" \"$DEST\"\nls -l \"$DEST\"\n";
-		};
 /* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXContainerItemProxy section */
@@ -57,12 +43,12 @@
 			containerPortal = 4FF354A327209F3D00F7F65E /* Project object */;
 			proxyType = 1;
 			remoteGlobalIDString = 4F9B00000000000000000017;
-			remoteInfo = KBPulse;
+			remoteInfo = kbpulse;
 		};
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXTargetDependency section */
-		4F9B00000000000000000022 /* KBPulse */ = {isa = PBXTargetDependency; target = 4FF354AA27209F3D00F7F65E /* KBPulse */; };
+		4F9B00000000000000000022 /* kbpulse */ = {isa = PBXTargetDependency; target = 4FF354AA27209F3D00F7F65E /* kbpulse */; };
 		4F9B0000000000000000002E /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
 			target = 4F9B00000000000000000017 /* KBPulseApp */;
@@ -237,26 +223,25 @@
 			);
 			dependencies = (
 			);
-			name = KBPulse;
-			productName = kbbright;
-			productReference = 4FF354AB27209F3D00F7F65E /* KBPulse */;
+			name = kbpulse;
+			productName = kbpulse;
+			productReference = 4FF354AB27209F3D00F7F65E /* kbpulse */;
 			productType = "com.apple.product-type.tool";
 		};
-		4F9B00000000000000000017 /* KBPulseApp */ = {
+		4F9B00000000000000000017 /* KBPulse */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = 4F9B0000000000000000001B /* Build configuration list for PBXNativeTarget "KBAPulseApp" */;
+			buildConfigurationList = 4F9B0000000000000000001B /* Build configuration list for PBXNativeTarget "KBPulse" */;
 			buildPhases = (
 				4F9B00000000000000000014 /* Sources */,
 				4F9B00000000000000000015 /* Frameworks */,
 				4F9B00000000000000000016 /* Resources */,
-				4F9B00000000000000000024 /* ShellScript */,
 			);
 			buildRules = (
 			);
 			dependencies = (
 				4F9B00000000000000000022 /* KBPulse */,
 			);
-			name = KBPulseApp;
+			name = KBPulse;
 			productName = KBPulse;
 			productReference = 4F9B00000000000000000013 /* KBPulseApp.app */;
 			productType = "com.apple.product-type.application";
@@ -429,7 +414,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.ethanrdoesmc.kbpulseapptests;
-				PRODUCT_NAME = "$(TARGET_NAME)";
+				PRODUCT_NAME = KBPulseAppTests;
 				SWIFT_VERSION = 5.0;
 				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/KBPulse.app/Contents/MacOS/KBPulse";
 			};
@@ -445,7 +430,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.ethanrdoesmc.kbpulseapptests;
-				PRODUCT_NAME = "$(TARGET_NAME)";
+				PRODUCT_NAME = KBPulseAppTests;
 				SWIFT_VERSION = 5.0;
 				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/KBPulse.app/Contents/MacOS/KBPulse";
 			};
