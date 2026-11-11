@@ -9,8 +9,9 @@
 5. **DMG build script** - Fixed and improved
 6. **New hooks system** - SystemEventRuntime, AgentHookRuntime, AgentMonitor added
 7. **SystemVolumeClient** - CoreAudio framework integration
+8. **Menu bar icon** - SF Symbol􀇮 keyboard icon
 
-## Known Issues
+## Resolved Issues
 
 ### CLI Commands Requiring Engine Access (RESOLVED)
 
@@ -22,13 +23,18 @@
 - Unknown profiles: logged and no-op
 - App not running: prints error, exit 1
 
-**Status:** Complete. See commits 11ca83f, 477b1c2, and 6ec6e39 for integration details.
+**Status:** Complete. See commits 11ca83f, 477b1c2, 6ec6e39, a85f10f for integration details.
 
 ### XCTest Target Integration (RESOLVED)
 Test file `KBPulseAppTests/KBPulseAppTests.swift` integrated into Xcode project via commit 6ec6e39. Target `KBPulseAppTests` created as unit-test bundle with proper `TEST_HOST` referencing KBPulseApp. All 13 tests pass.
 
+### Keyboard Settings Restoration (RESOLVED)
+App restores user-selected keyboard settings (auto-brightness, idle-dim time, brightness level) on quit via `NSApplication.willTerminateNotification` handler in AppState.swift.
+
+## Future Work
+
 ### DMG Distribution
-`build-dmg.sh` script exists and works. Consider adding (future work only):
+`build-dmg.sh` script exists and works. Consider adding:
 - Notarization handling for releases
 - Automatic version bumping
 - DMG background/branding
@@ -46,8 +52,10 @@ xcodebuild -project KBPulse.xcodeproj -scheme KBPulse -configuration Debug build
 
 ## Git History
 
-Last 10 commits:
+Last 11 commits on fork:
 ```
+a85f10f Use SF Symbol􀇮 for menu bar icon instead of LOGO image asset
+94f04fd Update handoff.md: add CLI commit, fix git history line count
 11ca83f Add CLI set/flash/off commands via distributed notifications
 6ec6e39 Integrate XCTest target and default missing Hook fields on decode
 a2f3399 Finalize Tier B implementation
@@ -57,7 +65,6 @@ a36d8f7 Fix DMG build script
 c5d8d67 Add music volume sync hook and DMG build script
 4ce36c9 Show last-fired time and skip count for hooks
 5c61dac Add frontmost-app, screen-lock, screen-unlock, and idle-threshold hooks
-d911ede Add pulse, hold, and fade hook actions
 ```
 
-All commits pushed to origin/main.
+Commits locally on fork. Push pending - permission issue with remote origin.
