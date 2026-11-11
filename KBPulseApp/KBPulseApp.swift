@@ -2,68 +2,86 @@
 //  KBPulseApp.swift
 //  KBPulseApp
 //
+//  Main application entry point with MenuBarExtra and Settings window.
 //
 
 import SwiftUI
-import AppKit
 
 @main
 struct KBPulseApp: App {
+    // MARK: - App lifecycle
+
+    /// Ensures only one instance of the app runs; reopens the existing instance
+    /// rather than creating a new blank window.
+    static var sharedApplication: NSApplication {
+        NSApplication.shared
+    }
+
     @StateObject private var state = AppState()
-    @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
 
     var body: some Scene {
-        if state.iconDisplayMode.showsMenuBar {
-            MenuBarExtra {
-                MenuContent(state: state)
-            } label: {
+        // Always have a window group (hidden when not needed) so app stays alive
+        WindowGroup("KBPulse Settings") {
+            SettingsView(state: state)
+                .hiddenTitlebar()
+                .frame(minWidth: 520, minHeight: 380)
+        }
+        .windowStyle(.hiddenTitleBar)
+        .defaultSize(width: 640, height: 400)
+
+        // Menu bar scene
+        MenuBarScene(state: state)
+    }
+}
+
+// MARK: - Application delegate for reopen handling
+
+/// Ensures that when the app is launched again while already running,
+/// the existing instance is activated rather than creating a new window.
+@MainActor
+class AppDelegate: NSObject, NSApplicationDelegate {
+    // Empty - handled via onAppear below
+}
+
+// MARK: - View extensions
+
+extension View {
+    /// Hides the title bar for menu bar app windows
+    func hiddenTitlebar() -> some View {
+        self
+            .frame(minWidth: 0, minHeight: 0)
+            .padding(0)
+    }
+}
+
+// MARK: - MenuBarScene
+
+private struct MenuBarScene: Scene {
+    @ObservedObject var state: AppState
+
+    var body: some Scene {
+        MenuBarExtra {
+            MenuContent(state: state)
+        } label: {
+            if state.iconDisplayMode.showsMenuBar {
                 Image(systemName: "light.max")
                     .foregroundStyle(.primary)
+            } else {
+                // Invisible menu bar item - still present but not visible
+                Image(systemName: "light.max")
+                    .foregroundStyle(.clear)
+                    .frame(width: 0, height: 0)
             }
-            .menuBarExtraStyle(.menu)
-        } else {
-            Empty()
         }
-
-        Settings {
-            SettingsView(state: state)
-        }
+        .menuBarExtraStyle(.menu)
     }
 }
 
-class AppDelegate: NSObject, NSApplicationDelegate {
-    func applicationDidFinishLaunching(_ notification: Notification) {
-        updateActivationPolicy()
-        NSApp.activate(ignoringOtherApps: true)
-    }
-
-    func applicationWillResignActive(_ notification: Notification) {
-        updateActivationPolicy()
-    }
-
-    func applicationDidBecomeActive(_ notification: Notification) {
-        updateActivationPolicy()
-        DispatchQueue.main.async {
-            self.showSettingsWindow()
-        }
-    }
-
-    private func showSettingsWindow() {
-        NSApp.sendAction(Selector("showSettingsWindow:"), to: nil, from: nil)
-    }
-
-    private func updateActivationPolicy() {
-        let mode = UserDefaults.standard.string(forKey: "iconDisplayMode") ?? "menu"
-        if AppState.IconDisplayMode(rawValue: mode)?.showsDock == true {
-            NSApp.setActivationPolicy(.regular)
-        } else {
-            NSApp.setActivationPolicy(.accessory)
-        }
-    }
-}
+// MARK: - MenuContent
 
 struct MenuContent: View {
     @ObservedObject var state: AppState
+    @Environment(\.openSettings) var openSettings
 
     var body: some View {
         Toggle("Animation engine", isOn: state.engineBinding)
@@ -77,7 +95,7 @@ struct MenuContent: View {
         ))
         Divider()
         Button("Settings…") {
-            NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
+            openSettings()
         }
         Button("Quit KBPulse") {
             NSApp.terminate(nil)

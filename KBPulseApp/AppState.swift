@@ -10,6 +10,7 @@
 import Foundation
 import ServiceManagement
 import SwiftUI
+import AppKit
 
 final class AppState: ObservableObject {
     enum IconDisplayMode: String, CaseIterable, Identifiable {
@@ -42,7 +43,25 @@ final class AppState: ObservableObject {
     }
     
     @Published var iconDisplayMode: IconDisplayMode = .menuBarOnly {
-        didSet { UserDefaults.standard.set(iconDisplayMode.rawValue, forKey: "iconDisplayMode") }
+        didSet { 
+            UserDefaults.standard.set(iconDisplayMode.rawValue, forKey: "iconDisplayMode")
+            NSApp.setActivationPolicy(iconDisplayMode.showsDock ? .regular : .accessory)
+        }
+    }
+
+    /// Tracks whether the app has Accessibility permission for key-event capture.
+    @Published private(set) var isAccessibilityGranted = false {
+        didSet { objectWillChange.send() }
+    }
+
+    /// Lists basenames of active coding agents detected in the process table.
+    @Published private(set) var activeAgents: [String] = [] {
+        didSet { objectWillChange.send() }
+    }
+
+    /// True when at least one system runtime timer is actively firing hooks.
+    @Published private(set) var hasSystemActivity = false {
+        didSet { objectWillChange.send() }
     }
     
     @Published var themes: [String] = []
@@ -54,6 +73,9 @@ final class AppState: ObservableObject {
     @Published private(set) var cliOnPATH = false
 
     let engine = Engine()
+
+    /// Polling timer for agent detection updates.
+    private var agentPollTimer: Timer?
 
     /// Hook theme per owner (`agent`, `system`), newest application wins.
     private var overrides: [String: String] = [:]
@@ -88,6 +110,9 @@ final class AppState: ObservableObject {
         iconDisplayMode = IconDisplayMode(rawValue: defaults.string(forKey: "iconDisplayMode") ?? "menu") ?? .menuBarOnly
         refreshThemes()
         refreshCLIStatus()
+        updateAccessibilityStatus()
+        updateAgentDetection()
+        startAccessibilityPolling()
         if engineOn {
             KBPPulseManager.modifyBacklightSettings()
             startEngine()
@@ -101,10 +126,34 @@ final class AppState: ObservableObject {
         cliOnPATH = CLISymlinkManager.isOnPATH
     }
 
+    /// Updates the accessibility-granted state exposed to the UI.
+    func updateAccessibilityStatus() {
+        isAccessibilityGranted = ReactiveEngine.isAccessibilityGranted(prompt: false)
+    }
+
+    /// Scans the process table and publishes active agent basenames.
+    func updateAgentDetection() {
+        if let agents = AgentMonitor.activeAgents {
+            activeAgents = agents
+        } else {
+            // nil means scan failed; show empty so the UI displays "unavailable".
+            activeAgents = []
+        }
+    }
+
     func installCLI() {
         if CLISymlinkManager.install() {
             cliInstalledPath = CLISymlinkManager.installedPath
             cliOnPATH = CLISymlinkManager.isOnPATH
+        }
+    }
+
+    /// Starts periodic polling for accessibility status and agent detection.
+    private func startAccessibilityPolling() {
+        agentPollTimer?.invalidate()
+        agentPollTimer = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: true) { [weak self] _ in
+            self?.updateAccessibilityStatus()
+            self?.updateAgentDetection()
         }
     }
 
