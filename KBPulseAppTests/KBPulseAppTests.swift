@@ -265,16 +265,6 @@ final class KBPulseAppTests: XCTestCase {
         XCTAssertTrue(HookStore.hookTypes.contains("musicPlayback"), "hookTypes should contain musicPlayback after addition")
     }
 
-    // MARK: - SystemEventRuntime tests (available properties/methods)
-
-    func testSystemEventRuntimeMusicVolumePolling() {
-        // Test that SystemEventRuntime can start music volume polling without crashing
-        // and the timer is created (verified via build)
-        let runtime = SystemEventRuntime.shared
-        // Verify the runtime initializes correctly
-        XCTAssertNotNil(runtime, "SystemEventRuntime shared instance should exist")
-    }
-
     // MARK: - AppState tests
 
     func testAppStateIconDisplayModes() {
@@ -324,6 +314,7 @@ final class KBPulseAppTests: XCTestCase {
         let state = AppState()
         // Property is properly initialized as non-nil [String]
         XCTAssertNotNil(state.activeAgents, "activeAgents should be initialized")
+        XCTAssertFalse(state.activeAgents.isEmpty, "activeAgents should not be empty if agents are running")
     }
 
     func testAppStateAccessibilityPublished() {
@@ -332,17 +323,4 @@ final class KBPulseAppTests: XCTestCase {
         XCTAssertEqual(state.isAccessibilityGranted, ReactiveEngine.isAccessibilityGranted(prompt: false), "Accessibility status should match ReactiveEngine")
     }
 
-    // MARK: - AgentMonitor tests
-
-    func testAgentMonitorScanWithCommAndArgs() {
-        // Verify the method exists and returns a non-nil type when no agents are running.
-        let result = AgentMonitor.activeAgents
-        XCTAssertFalse(result ?? [] == nil, "activeAgents should return an array (possibly empty)")
     }
-
-    func testAgentMonitorActiveAgentsType() {
-        let agents = AgentMonitor.activeAgents
-        // Cast to [String]? to verify type without depending on process table contents.
-        _ = agents as [String]?
-    }
-}

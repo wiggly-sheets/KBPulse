@@ -143,6 +143,8 @@ struct ThemesTab: View {
     @State private var isDirty = false
     @State private var previousEffectiveTheme: String?
     @State private var previousReactiveMode: ReactiveMode?
+    @State private var showDiscardAlert = false
+    @State private var pendingSelection = ""
 
     var body: some View {
         Form {
@@ -201,8 +203,16 @@ struct ThemesTab: View {
                             let url = AppState.themesDir.appendingPathComponent("\(selected).json")
                             state.engine.stop()
                             let profile = KBPProfile(fileURL: url)
-                            previousEffectiveTheme = state.effectiveTheme
-                            previousReactiveMode = ReactiveMode(forEngine: doc.raw)
+                            let prevTheme = state.effectiveTheme
+                            var prevReactive: ReactiveMode?
+                            if let prevTheme {
+                                let prevURL = AppState.themesDir.appendingPathComponent("\(prevTheme).json")
+                                if let raw = try? ThemeStore.rawDictionary(at: prevURL) {
+                                    prevReactive = ReactiveMode(forEngine: raw)
+                                }
+                            }
+                            previousEffectiveTheme = prevTheme
+                            previousReactiveMode = prevReactive
                             state.engine.start(profile: profile, reactive: doc.reactive.enabled ? doc.reactive : nil)
                             DispatchQueue.main.asyncAfter(deadline: .now() + 10) { [previousEffectiveTheme, previousReactiveMode] in
                                 guard let effectiveTheme = previousEffectiveTheme else { return }
@@ -275,6 +285,7 @@ struct ThemesTab: View {
         }
         .formStyle(.grouped)
         .onChange(of: doc.name) { _ in isDirty = true }
+        .onReceive(doc.objectWillChange) { _ in isDirty = true }
         .onAppear {
             if selected.isEmpty { selected = state.selectedTheme }
             loadSelected()
@@ -295,6 +306,18 @@ struct ThemesTab: View {
             Button("OK", role: .cancel) {}
         } message: {
             Text(message ?? "")
+        }
+        .alert("Unsaved changes", isPresented: $showDiscardAlert) {
+            Button("Discard", role: .destructive) {
+                isDirty = false
+                loadSelectedForPending()
+            }
+            Button("Cancel", role: .cancel) {
+                selected = pendingSelection.isEmpty ? (doc.name.isEmpty ? "" : doc.name) : pendingSelection
+                pendingSelection = ""
+            }
+        } message: {
+            Text("You have unsaved edits in \(doc.name.isEmpty ? selected : doc.name). Save or discard them before switching themes.")
         }
     }
 
@@ -325,7 +348,8 @@ struct ThemesTab: View {
     private func loadSelected() {
         guard !selected.isEmpty else { return }
         if isDirty {
-            message = "You have unsaved edits in \(doc.name.isEmpty ? selected : doc.name). Save or discard them first."
+            pendingSelection = selected
+            showDiscardAlert = true
             return
         }
         do {
@@ -337,6 +361,21 @@ struct ThemesTab: View {
             doc.reset()
             message = error.localizedDescription
             isDirty = false
+        }
+    }
+    
+    private func loadSelectedForPending() {
+        guard !pendingSelection.isEmpty else { return }
+        do {
+            try doc.load(from: AppState.themesDir.appendingPathComponent("\(pendingSelection).json"))
+            isDirty = false
+            selected = pendingSelection
+            pendingSelection = ""
+        } catch {
+            doc.reset()
+            message = error.localizedDescription
+            isDirty = false
+            pendingSelection = ""
         }
     }
 
