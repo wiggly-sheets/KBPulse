@@ -18,15 +18,23 @@ enum AgentMonitor {
     /// Basenames currently matched in the process table. Empty when no agent
     /// runs; nil when the process-table scan failed.
     private static let refreshQueue = DispatchQueue(label: "com.kbpulse.agentmonitor")
+    private static let cacheLock = NSLock()
     private static var _cachedScanResult: Set<String>? = nil
 
     static var activeAgents: [String]? {
         let names = Set(HookStore.monitoredNames().map { $0.lowercased() })
         guard !names.isEmpty else { return [] }
-        // Serve a synchronous first-pass scan if nothing has been cached yet;
-        // subsequent reads use the background-cached snapshot.
-        var scanned = _cachedScanResult
-        if scanned == nil { scanned = scan() }
+        // First read after launch runs one synchronous scan and caches it;
+        // later reads use the cache kept warm by the timer's refreshAsync.
+        cacheLock.lock()
+        if _cachedScanResult == nil {
+            cacheLock.unlock()
+            let fresh = scan()
+            cacheLock.lock()
+            _cachedScanResult = fresh
+        }
+        let scanned = _cachedScanResult
+        cacheLock.unlock()
         guard let scanned else { return nil }
         return scanned.filter { names.contains($0.lowercased()) }.sorted()
     }
@@ -35,7 +43,10 @@ enum AgentMonitor {
     /// future `activeAgents` reads do not block the caller's thread.
     static func refreshAsync() {
         refreshQueue.async {
-            _cachedScanResult = scan()
+            let fresh = scan()
+            cacheLock.lock()
+            _cachedScanResult = fresh
+            cacheLock.unlock()
         }
     }
 
@@ -80,5 +91,7 @@ enum AgentMonitor {
                     if !argBase.isEmpty { names.insert(argBase.lowercased()) }
                 }
             }
+        }
+        return names
     }
 }

@@ -88,7 +88,7 @@ final class SystemEventRuntime {
         timer = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: true) { [weak self] _ in
             self?.pollDownloads()
         }
-        RunLoop.main.add(timer, forMode: .common)
+        if let timer { RunLoop.main.add(timer, forMode: .common) }
         DistributedNotificationCenter.default().addObserver(
             self, selector: #selector(sleepNotification(_:)),
             name: NSWorkspace.willSleepNotification, object: nil)
@@ -108,24 +108,24 @@ final class SystemEventRuntime {
         screenLockTimer = Timer.scheduledTimer(withTimeInterval: 5.0, repeats: true) { [weak self] _ in
             self?.pollScreenLock()
         }
-        RunLoop.main.add(screenLockTimer, forMode: .common)
+        if let screenLockTimer { RunLoop.main.add(screenLockTimer, forMode: .common) }
         // Poll for idle threshold every 10 s
         idleTimer = Timer.scheduledTimer(withTimeInterval: 10.0, repeats: true) { [weak self] _ in
             self?.pollIdle()
         }
-        RunLoop.main.add(idleTimer, forMode: .common)
+        if let idleTimer { RunLoop.main.add(idleTimer, forMode: .common) }
         // Poll for music volume every 5 s
         musicVolumeTimer = Timer.scheduledTimer(withTimeInterval: 5.0, repeats: true) { [weak self] _ in
             self?.pollMusicVolume()
         }
-        RunLoop.main.add(musicVolumeTimer, forMode: .common)
+        if let musicVolumeTimer { RunLoop.main.add(musicVolumeTimer, forMode: .common) }
         // Seed last volume level
         lastVolumeLevel = SystemVolumeClient.systemOutputVolume()
         // Poll for music playback every 2.5 s
         musicPlaybackTimer = Timer.scheduledTimer(withTimeInterval: 2.5, repeats: true) { [weak self] _ in
             self?.pollMusicPlayback()
         }
-        RunLoop.main.add(musicPlaybackTimer, forMode: .common)
+        if let musicPlaybackTimer { RunLoop.main.add(musicPlaybackTimer, forMode: .common) }
         // Seed initial music playback state
         seedMusicPlaybackState()
     }

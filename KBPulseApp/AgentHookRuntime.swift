@@ -32,7 +32,7 @@ final class AgentHookRuntime {
         timer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
             self?.tick()
         }
-        RunLoop.main.add(timer, forMode: .common)
+        if let timer { RunLoop.main.add(timer, forMode: .common) }
         // First tick immediately so the user sees the switch without a 1 s wait.
         tick()
     }
