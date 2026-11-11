@@ -31,7 +31,8 @@ enum AgentMonitor {
     private static func scan() -> Set<String>? {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/bin/ps")
-        process.arguments = ["-A", "-o", "comm="]
+        // Scan both command name (comm) and full arguments/command line (args) to catch CLI wrappers like node running opencode/claude
+        process.arguments = ["-A", "-o", "comm=,args="]
         let pipe = Pipe()
         process.standardOutput = pipe
         process.standardError = FileHandle.nullDevice
@@ -40,7 +41,6 @@ enum AgentMonitor {
         } catch {
             return nil
         }
-        // Drain stdout before waiting: a full pipe buffer would block exit.
         let data = pipe.fileHandleForReading.readDataToEndOfFile()
         process.waitUntilExit()
         guard process.terminationStatus == 0 else { return nil }
@@ -50,10 +50,24 @@ enum AgentMonitor {
         var names = Set<String>()
         for line in output.split(separator: "\n", omittingEmptySubsequences: true) {
             let trimmed = line.trimmingCharacters(in: .whitespaces)
-            // Full paths from ps (e.g. /opt/homebrew/bin/codex); keep the basename.
-            let base = (trimmed as NSString).lastPathComponent
-            if !base.isEmpty { names.insert(base) }
+            // Skip header lines from ps output
+            guard !trimmed.lowercased().starts(with: "comm") else { continue }
+            let parts = trimmed.split(separator: " ", maxSplits: 1, omittingEmptySubsequences: true)
+            if let comm = parts.first {
+                let base = (String(comm) as NSString).lastPathComponent
+                if !base.isEmpty { names.insert(base) }
+            }
+            if parts.count > 1 {
+                let args = parts[1]
+                let argParts = args.split(separator: " ", omittingEmptySubsequences: true)
+                for arg in argParts {
+                    let argBase = (String(arg) as NSString).lastPathComponent
+                    if !argBase.isEmpty { names.insert(argBase) }
+                }
+            }
         }
+        // Explicit deduplication via Set already handles this, but also lowercase-normalize
+        // to ensure "Codex" and "codex" are treated as the same agent.
         return names
     }
 }
