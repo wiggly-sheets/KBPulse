@@ -10,6 +10,42 @@
 
 import Foundation
 
+/// Result of a symlink install attempt.
+enum CLIInstallResult {
+    /// Already installed and pointing at the bundled path; no-op success.
+    case alreadyInstalled(URL)
+    /// Symlink created successfully.
+    case installed(URL)
+    /// Bundled binary not found.
+    case missingBundledCLI
+    /// Existing item is not our symlink — refusing to overwrite user data.
+    case protectedFile(URL)
+    /// An error occurred.
+    case failure(String)
+
+    var isSuccess: Bool {
+        switch self {
+        case .alreadyInstalled, .installed: return true
+        case .missingBundledCLI, .protectedFile, .failure: return false
+        }
+    }
+
+    var message: String? {
+        switch self {
+        case .alreadyInstalled(let url):
+            return "kbpulse is already installed at \(url.path)"
+        case .installed(let url):
+            return "Installed kbpulse at \(url.path)"
+        case .missingBundledCLI:
+            return "Bundled CLI not found"
+        case .protectedFile(let url):
+            return "Refused to replace \(url.path) — it is not our symlink"
+        case .failure(let detail):
+            return "Install failed: \(detail)"
+        }
+    }
+}
+
 struct CLISymlinkManager {
     /// Bundled CLI path inside the app bundle: KBPulseApp.app/Contents/MacOS/kbpulse
     static let bundledCLIPath: URL = {
@@ -57,17 +93,39 @@ struct CLISymlinkManager {
     /// Install or refresh the symlink. Returns true on success.
     @discardableResult
     static func install() -> Bool {
+        switch installWithStatus() {
+        case .alreadyInstalled, .installed: return true
+        case .missingBundledCLI, .protectedFile, .failure: return false
+        }
+    }
+
+    /// Install or refresh the symlink. Returns rich status on success/failure.
+    @discardableResult
+    static func installWithStatus() -> CLIInstallResult {
         let fm = FileManager.default
-        if !fm.fileExists(atPath: bundledCLIPath.path) { return false }
+        guard fm.fileExists(atPath: bundledCLIPath.path) else {
+            return .missingBundledCLI
+        }
         do {
             try fm.createDirectory(at: installDir, withIntermediateDirectories: true)
             if fm.fileExists(atPath: installPath.path) {
-                try fm.removeItem(at: installPath)
+                // Only remove if it is already our symlink (or dangling toward us).
+                if let existingDest = try? fm.destinationOfSymbolicLink(atPath: installPath.path) {
+                    if existingDest == bundledCLIPath.path {
+                        try fm.removeItem(at: installPath)
+                    } else {
+                        // Existing symlink points elsewhere — refuse to overwrite.
+                        return .protectedFile(installPath)
+                    }
+                } else {
+                    // Not a symlink at all — likely a user file; refuse to overwrite.
+                    return .protectedFile(installPath)
+                }
             }
             try fm.createSymbolicLink(at: installPath, withDestinationURL: bundledCLIPath)
-            return true
+            return .installed(installPath)
         } catch {
-            return false
+            return .failure(error.localizedDescription)
         }
     }
 }

@@ -24,7 +24,7 @@ final class Engine {
     private var thread: Thread?
     private var profile: KBPProfile?
     private var reactive: ReactiveMode?
-    private var overlay: (() -> Void)?
+    private var overlay: ((Int) -> Void)?
     private let overlayLock = NSLock()
     // The running reactive engine, so `flash()` can inject impulses. Guarded
     // because flashes arrive from hook threads.
@@ -41,7 +41,7 @@ final class Engine {
 
     /// One-shot overlay: runs `work` on the engine thread, then the base loop
     /// resumes on its next iteration. No-op while reactive mode is active.
-    func overlay(_ work: @escaping () -> Void) {
+    func overlay(_ work: @escaping (Int) -> Void) {
         reactiveEngineLock.lock()
         let reactive = reactiveEngine
         reactiveEngineLock.unlock()
@@ -62,10 +62,10 @@ final class Engine {
             reactive.impulse(amount: 1.0)
             return
         }
-        overlay { [weak self] in
+        overlay { [weak self] id in
             guard let self else { return }
             KBPAnimator.setBrightness(1, withDuration: 80)
-            Thread.sleep(forTimeInterval: 0.3)
+            sleepChunks(0.3, id: id)
             KBPAnimator.setBrightness(0, withDuration: 1000)
         }
     }
@@ -84,25 +84,28 @@ final class Engine {
         }
         switch action {
         case "pulse":
-            overlay {
+            overlay { [weak self] id in
+                guard let self else { return }
                 for _ in 0..<2 {
                     KBPAnimator.setBrightness(1, withDuration: 80)
-                    Thread.sleep(forTimeInterval: 0.08)
+                    sleepChunks(0.08, id: id)
                     KBPAnimator.setBrightness(0, withDuration: 120)
-                    Thread.sleep(forTimeInterval: 0.12)
+                    sleepChunks(0.12, id: id)
                 }
                 KBPAnimator.setBrightness(0, withDuration: 800)
             }
         case "hold":
-            overlay {
+            overlay { [weak self] id in
+                guard let self else { return }
                 KBPAnimator.setBrightness(1, withDuration: 80)
-                Thread.sleep(forTimeInterval: 2.08)
+                sleepChunks(2.08, id: id)
                 KBPAnimator.setBrightness(0, withDuration: 1500)
             }
         case "fade":
-            overlay {
+            overlay { [weak self] id in
+                guard let self else { return }
                 KBPAnimator.setBrightness(0, withDuration: 2000)
-                Thread.sleep(forTimeInterval: 3.0)
+                sleepChunks(3.0, id: id)
             }
         default:
             flash()
@@ -130,6 +133,7 @@ final class Engine {
 
     func setTheme(_ name: String) {
         let url = AppState.themesDir.appendingPathComponent("\(name).json")
+        guard FileManager.default.fileExists(atPath: url.path) else { return }
         let raw = (try? ThemeStore.rawDictionary(at: url)) ?? [:]
         stop()
         start(profile: KBPProfile(fileURL: url), reactive: ReactiveMode(forEngine: raw))
@@ -160,7 +164,7 @@ final class Engine {
             overlayLock.unlock()
             if let ov {
                 guard isCurrent(id) else { return }
-                ov()
+                ov(id)
                 continue
             }
             if let reactive {
@@ -180,7 +184,7 @@ final class Engine {
             guard profile.animations.count > 0 else { return }
             for case let animation as KBPAnimation in profile.animations {
                 guard isCurrent(id) else { return }
-                KBPAnimator.setBrightness(animation.brightness.floatValue,
+                KBPAnimator.setBrightness(Float(min(1, max(0, animation.brightness.floatValue))),
                                           withDuration: Int32(animation.fadeDuration.intValue))
                 sleepChunks(max(animation.totalDuration().doubleValue / 1000, 0.05), id: id)
             }

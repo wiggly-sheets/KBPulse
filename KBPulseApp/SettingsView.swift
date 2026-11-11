@@ -47,10 +47,14 @@ struct SettingsView: View {
         TabView {
             general
                 .tabItem { Label("General", systemImage: "gearshape") }
-            ThemesTab(state: state)
-                .tabItem { Label("Themes", systemImage: "paintpalette") }
-            HooksTab(state: state)
-                .tabItem { Label("Hooks", systemImage: "bolt") }
+            ScrollView {
+                ThemesTab(state: state)
+            }
+            .tabItem { Label("Themes", systemImage: "paintpalette") }
+            ScrollView {
+                HooksTab(state: state)
+            }
+            .tabItem { Label("Hooks", systemImage: "bolt") }
         }
         .frame(width: 640)
     }
@@ -122,6 +126,7 @@ struct SettingsView: View {
 
 private struct CLIView: View {
     @ObservedObject var state: AppState
+    @State private var cliInstallMessage: String?
 
     var body: some View {
         Section("Command line") {
@@ -142,13 +147,32 @@ private struct CLIView: View {
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
+            if let msg = cliInstallMessage {
+                Text(msg)
+                    .font(.footnote)
+                    .foregroundStyle(msg.contains("Refused") ? .orange : .primary)
+                    .fixedSize(horizontal: false, vertical: true)
+                if msg.contains("already installed") || msg.contains("Installed") {
+                    Button("Refresh PATH") {
+                        state.refreshCLIStatus()
+                    }
+                }
+            }
             if state.cliInstalledPath == nil {
                 Button("Install kbpulse to ~/.local/bin") {
-                    state.installCLI()
+                    let result = CLISymlinkManager.installWithStatus()
+                    cliInstallMessage = result.message
+                    if result.isSuccess {
+                        state.refreshCLIStatus()
+                    }
                 }
             } else {
                 Button("Reinstall") {
-                    state.installCLI()
+                    let result = CLISymlinkManager.installWithStatus()
+                    cliInstallMessage = result.message
+                    if result.isSuccess {
+                        state.refreshCLIStatus()
+                    }
                 }
             }
             Text("The CLI runs the same engine as the app. Use it for scripts, launchers, keyboard shortcuts.")
@@ -299,7 +323,8 @@ private struct HooksTab: View {
 
         var updated = hooks
         let hook = updated.remove(at: fromIndex)
-        updated.insert(hook, at: toIndex)
+        let at = toIndex > fromIndex ? toIndex - 1 : toIndex
+        updated.insert(hook, at: at)
         if let msg = persist(updated) {
             error = msg
         }

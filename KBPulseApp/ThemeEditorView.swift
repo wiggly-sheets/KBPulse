@@ -140,6 +140,9 @@ struct ThemesTab: View {
     @State private var message: String?
     @State private var permissionGranted = ReactiveEngine.isAccessibilityGranted(prompt: false)
     @State private var showBrightnessCurve = false
+    @State private var isDirty = false
+    @State private var previousEffectiveTheme: String?
+    @State private var previousReactiveMode: ReactiveMode?
 
     var body: some View {
         Form {
@@ -198,7 +201,15 @@ struct ThemesTab: View {
                             let url = AppState.themesDir.appendingPathComponent("\(selected).json")
                             state.engine.stop()
                             let profile = KBPProfile(fileURL: url)
+                            previousEffectiveTheme = state.effectiveTheme
+                            previousReactiveMode = ReactiveMode(forEngine: doc.raw)
                             state.engine.start(profile: profile, reactive: doc.reactive.enabled ? doc.reactive : nil)
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 10) { [previousEffectiveTheme, previousReactiveMode] in
+                                guard let effectiveTheme = previousEffectiveTheme else { return }
+                                let url = AppState.themesDir.appendingPathComponent("\(effectiveTheme).json")
+                                let raw = (try? ThemeStore.rawDictionary(at: url)) ?? [:]
+                                state.engine.start(profile: KBPProfile(fileURL: url), reactive: previousReactiveMode.flatMap { $0 })
+                            }
                         }
                         .disabled(selected.isEmpty || (doc.animations.isEmpty && !doc.hasReactive))
                         Button("Show brightness curve") { showBrightnessCurve.toggle() }
@@ -263,6 +274,7 @@ struct ThemesTab: View {
             }
         }
         .formStyle(.grouped)
+        .onChange(of: doc.name) { _ in isDirty = true }
         .onAppear {
             if selected.isEmpty { selected = state.selectedTheme }
             loadSelected()
@@ -312,13 +324,19 @@ struct ThemesTab: View {
 
     private func loadSelected() {
         guard !selected.isEmpty else { return }
+        if isDirty {
+            message = "You have unsaved edits in \(doc.name.isEmpty ? selected : doc.name). Save or discard them first."
+            return
+        }
         do {
             try doc.load(from: AppState.themesDir.appendingPathComponent("\(selected).json"))
+            isDirty = false
         } catch {
             // Broken file: keep the editor empty rather than risking stale
             // contents of a previously loaded theme being saved on top.
             doc.reset()
             message = error.localizedDescription
+            isDirty = false
         }
     }
 
@@ -331,6 +349,7 @@ struct ThemesTab: View {
             try doc.save(to: AppState.themesDir.appendingPathComponent("\(selected).json"))
             state.themeEdited(selected)
             message = "Saved \"\(selected).json\"."
+            isDirty = false
         } catch {
             message = error.localizedDescription
         }
@@ -339,12 +358,18 @@ struct ThemesTab: View {
     private func duplicate() {
         let name = newName.trimmingCharacters(in: .whitespaces)
         guard !name.isEmpty, !selected.isEmpty else { return }
-        guard !state.themes.contains(name) else {
+        // Case-insensitive collision check — APFS is case-insensitive by default
+        let exists = state.themes.contains { $0.caseInsensitiveCompare(name) == .orderedSame }
+        guard !exists else {
             message = "A theme named \"\(name)\" already exists."
             return
         }
         var dict = doc.raw
         dict["Name"] = name
+        guard !dict.isEmpty else {
+            message = "Cannot duplicate a theme that failed to load."
+            return
+        }
         do {
             try ThemeStore.write(dict, to: AppState.themesDir.appendingPathComponent("\(name).json"))
             state.refreshThemes()
@@ -379,6 +404,10 @@ struct ThemesTab: View {
         panel.nameFieldStringValue = selected.isEmpty ? doc.name : selected
         panel.directoryURL = AppState.themesDir
         guard panel.runModal() == .OK, let url = panel.url else { return }
+        if let validationError = doc.validate() {
+            message = validationError
+            return
+        }
         do {
             // Exports the current in-editor state, including unsaved edits.
             try doc.save(to: url)

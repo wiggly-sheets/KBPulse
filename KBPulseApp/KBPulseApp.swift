@@ -43,15 +43,6 @@ struct KBPulseApp: App {
     }
 }
 
-// MARK: - Application delegate for reopen handling
-
-/// Ensures that when the app is launched again while already running,
-/// the existing instance is activated rather than creating a new window.
-@MainActor
-class AppDelegate: NSObject, NSApplicationDelegate {
-    // Empty - handled via onAppear below
-}
-
 // MARK: - View extensions
 
 extension View {

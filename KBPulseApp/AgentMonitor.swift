@@ -17,11 +17,26 @@ import Foundation
 enum AgentMonitor {
     /// Basenames currently matched in the process table. Empty when no agent
     /// runs; nil when the process-table scan failed.
+    private static let refreshQueue = DispatchQueue(label: "com.kbpulse.agentmonitor")
+    private static var _cachedScanResult: Set<String>? = nil
+
     static var activeAgents: [String]? {
         let names = Set(HookStore.monitoredNames().map { $0.lowercased() })
         guard !names.isEmpty else { return [] }
-        guard let scanned = scan() else { return nil }
+        // Serve a synchronous first-pass scan if nothing has been cached yet;
+        // subsequent reads use the background-cached snapshot.
+        var scanned = _cachedScanResult
+        if scanned == nil { scanned = scan() }
+        guard let scanned else { return nil }
         return scanned.filter { names.contains($0.lowercased()) }.sorted()
+    }
+
+    /// Runs a fresh `ps` scan on a background queue and caches the result so
+    /// future `activeAgents` reads do not block the caller's thread.
+    static func refreshAsync() {
+        refreshQueue.async {
+            _cachedScanResult = scan()
+        }
     }
 
     // MARK: - Process table scan
@@ -55,19 +70,15 @@ enum AgentMonitor {
             let parts = trimmed.split(separator: " ", maxSplits: 1, omittingEmptySubsequences: true)
             if let comm = parts.first {
                 let base = (String(comm) as NSString).lastPathComponent
-                if !base.isEmpty { names.insert(base) }
+                if !base.isEmpty { names.insert(base.lowercased()) }
             }
             if parts.count > 1 {
                 let args = parts[1]
                 let argParts = args.split(separator: " ", omittingEmptySubsequences: true)
                 for arg in argParts {
                     let argBase = (String(arg) as NSString).lastPathComponent
-                    if !argBase.isEmpty { names.insert(argBase) }
+                    if !argBase.isEmpty { names.insert(argBase.lowercased()) }
                 }
             }
-        }
-        // Explicit deduplication via Set already handles this, but also lowercase-normalize
-        // to ensure "Codex" and "codex" are treated as the same agent.
-        return names
     }
 }

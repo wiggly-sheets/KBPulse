@@ -32,6 +32,7 @@ final class AgentHookRuntime {
         timer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
             self?.tick()
         }
+        RunLoop.main.add(timer, forMode: .common)
         // First tick immediately so the user sees the switch without a 1 s wait.
         tick()
     }
@@ -42,6 +43,12 @@ final class AgentHookRuntime {
         previousAgents = []
         diagnostics = [:]
         state?.clearOverride(owner: "agent")
+    }
+
+    /// Clears previousAgents so the next tick re-applies the attention hook
+    /// for any still-running agent after a manual theme selection cleared overrides.
+    static func resetForThemeSelection() {
+        shared.previousAgents = []
     }
 
     // MARK: - Tick

@@ -38,8 +38,8 @@ final class ReactiveEngine {
     /// Envelope: instant bump, linear decay from `floor + amount` down to
     /// `floor` over `decay` ms. Pure function so it can be tested standalone.
     static func brightness(elapsedMS: Double, amount: Double, floor: Double, decay: Double) -> Double {
-        guard amount > 0, decay > 0, elapsedMS >= 0, elapsedMS < decay else { return floor }
-        return min(1, floor + amount * (1 - elapsedMS / decay))
+        guard amount > 0, decay > 0, elapsedMS >= 0, elapsedMS < decay else { return min(1, max(0, floor)) }
+        return min(1, max(0, floor + amount * (1 - elapsedMS / decay)))
     }
 
     private func currentState() -> State? {
@@ -117,7 +117,7 @@ final class ReactiveEngine {
         }
         if let timer { CFRunLoopAddTimer(CFRunLoopGetCurrent(), timer, .defaultMode) }
 
-        KBPAnimator.setBrightness(Float(min(1, cfg.floor)), withDuration: 2500)
+        KBPAnimator.setBrightness(Float(min(1, max(0, cfg.floor))), withDuration: 2500)
         lastTapCheck = 0
         CFRunLoopRun()
 
@@ -133,7 +133,7 @@ final class ReactiveEngine {
         stateLock.unlock()
         Unmanaged<State>.fromOpaque(refcon).release()
         // Resting state, matching the breathing loop's shutdown fade.
-        KBPAnimator.setBrightness(Float(min(1, cfg.floor)), withDuration: 2500)
+        KBPAnimator.setBrightness(Float(min(1, max(0, cfg.floor))), withDuration: 2500)
         return true
     }
 

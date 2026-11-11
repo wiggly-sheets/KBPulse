@@ -93,12 +93,12 @@ struct Hook: Codable, Hashable {
     // entries still load.
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
-        hookType = try c.decodeIfPresent(String.self, forKey: .hookType) ?? ""
-        trigger = try c.decodeIfPresent(String.self, forKey: .trigger) ?? ""
-        action = try c.decodeIfPresent(String.self, forKey: .action) ?? ""
-        theme = try c.decodeIfPresent(String.self, forKey: .theme) ?? ""
-        enabled = try c.decodeIfPresent(Bool.self, forKey: .enabled) ?? false
-        cooldown = try c.decodeIfPresent(Double.self, forKey: .cooldown)
+        hookType = try? c.decodeIfPresent(String.self, forKey: .hookType) ?? ""
+        trigger = try? c.decodeIfPresent(String.self, forKey: .trigger) ?? ""
+        action = try? c.decodeIfPresent(String.self, forKey: .action) ?? ""
+        theme = try? c.decodeIfPresent(String.self, forKey: .theme) ?? ""
+        enabled = try? c.decodeIfPresent(Bool.self, forKey: .enabled) ?? false
+        cooldown = try? c.decodeIfPresent(Double.self, forKey: .cooldown)
     }
 }
 
@@ -268,12 +268,20 @@ enum HookStore {
     }
 
     /// All enabled hooks, or [] when the file is missing/invalid.
+    /// Uses per-element lenient decoding so one malformed hook doesn't fail the whole file.
     static func load() -> [Hook] {
-        guard let data = try? Data(contentsOf: fileURL),
-              let list = try? JSONDecoder().decode([Hook].self, from: data) else {
-            return []
+        guard let data = try? Data(contentsOf: fileURL) else { return [] }
+        var result: [Hook] = []
+        if let jsonArray = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]] {
+            let decoder = JSONDecoder()
+            for obj in jsonArray {
+                if let objData = try? JSONSerialization.data(withJSONObject: obj),
+                   let hook = try? decoder.decode(Hook.self, from: objData) {
+                    result.append(hook)
+                }
+            }
         }
-        return list
+        return result
     }
 
     /// Like `load()`, but reports read and decode failures so the editor can

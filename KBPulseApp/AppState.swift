@@ -81,8 +81,12 @@ final class AppState: ObservableObject {
     private var overrides: [String: String] = [:]
     private var overrideOrder: [String] = []
 
-    static let themesDir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
-        .appendingPathComponent("KBPulse", isDirectory: true)
+    static let themesDir: URL = {
+        guard let dir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first else {
+            return URL(fileURLWithPath: NSHomeDirectory())
+        }
+        return dir.appendingPathComponent("KBPulse", isDirectory: true)
+    }()
 
     init() {
         KBPPulseManager.loadPrivateFrameworks()
@@ -168,7 +172,7 @@ final class AppState: ObservableObject {
             .sorted()
         themes = names
         let saved = UserDefaults.standard.string(forKey: "selectedTheme")
-        selectedTheme = names.contains(saved ?? " ") ? saved! : (names.first ?? saved ?? "")
+        selectedTheme = names.contains(saved ?? "\u{0}") ? (saved ?? "") : (names.first ?? saved ?? "")
         if selectedTheme != saved {
             UserDefaults.standard.set(selectedTheme, forKey: "selectedTheme")
         }
@@ -274,6 +278,7 @@ final class AppState: ObservableObject {
 
     private func startEngine() {
         let url = Self.themesDir.appendingPathComponent("\(effectiveTheme).json")
+        guard FileManager.default.fileExists(atPath: url.path) else { return }
         let raw = (try? ThemeStore.rawDictionary(at: url)) ?? [:]
         engine.start(profile: KBPProfile(fileURL: url), reactive: ReactiveMode(forEngine: raw))
     }

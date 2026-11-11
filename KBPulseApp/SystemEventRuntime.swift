@@ -51,7 +51,7 @@ final class SystemEventRuntime {
     private var screenLockTimer: Timer?
     private var lastScreenLocked = false
     private var idleTimer: Timer?
-    private var lastIdleFire: Date?
+    private var lastIdleFireByTrigger: [String: Date] = [:]
     private var musicVolumeTimer: Timer?
     private var lastVolumeLevel: Float = 0.0
     // Music playback monitoring
@@ -68,7 +68,7 @@ final class SystemEventRuntime {
         diagnostics = [:]
         lastFrontmostApp = nil
         lastScreenLocked = false
-        lastIdleFire = nil
+        lastIdleFireByTrigger = [:]
         timer?.invalidate()
         timer = nil
         overrideTimer?.invalidate()
@@ -88,6 +88,7 @@ final class SystemEventRuntime {
         timer = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: true) { [weak self] _ in
             self?.pollDownloads()
         }
+        RunLoop.main.add(timer, forMode: .common)
         DistributedNotificationCenter.default().addObserver(
             self, selector: #selector(sleepNotification(_:)),
             name: NSWorkspace.willSleepNotification, object: nil)
@@ -107,20 +108,24 @@ final class SystemEventRuntime {
         screenLockTimer = Timer.scheduledTimer(withTimeInterval: 5.0, repeats: true) { [weak self] _ in
             self?.pollScreenLock()
         }
+        RunLoop.main.add(screenLockTimer, forMode: .common)
         // Poll for idle threshold every 10 s
         idleTimer = Timer.scheduledTimer(withTimeInterval: 10.0, repeats: true) { [weak self] _ in
             self?.pollIdle()
         }
+        RunLoop.main.add(idleTimer, forMode: .common)
         // Poll for music volume every 5 s
         musicVolumeTimer = Timer.scheduledTimer(withTimeInterval: 5.0, repeats: true) { [weak self] _ in
             self?.pollMusicVolume()
         }
+        RunLoop.main.add(musicVolumeTimer, forMode: .common)
         // Seed last volume level
         lastVolumeLevel = SystemVolumeClient.systemOutputVolume()
         // Poll for music playback every 2.5 s
         musicPlaybackTimer = Timer.scheduledTimer(withTimeInterval: 2.5, repeats: true) { [weak self] _ in
             self?.pollMusicPlayback()
         }
+        RunLoop.main.add(musicPlaybackTimer, forMode: .common)
         // Seed initial music playback state
         seedMusicPlaybackState()
     }
@@ -146,7 +151,7 @@ final class SystemEventRuntime {
         diagnostics = [:]
         lastFrontmostApp = nil
         lastScreenLocked = false
-        lastIdleFire = nil
+        lastIdleFireByTrigger = [:]
         lastVolumeLevel = 0.0
         lastPlaybackState = .stopped
         lastTrackTitle = ""
@@ -253,13 +258,16 @@ final class SystemEventRuntime {
             let trigger = hook.trigger.trimmingCharacters(in: .whitespaces)
             let threshold = trigger.isEmpty ? 300.0 : (Double(trigger) ?? 300.0)
             if effectiveIdle >= threshold {
-                // Fire once per threshold period
-                if let last = lastIdleFire, Date().timeIntervalSince(last) < threshold {
+                // Fire once per threshold period, tracked per-hook by trigger so
+                // separate idle hooks do not share a single cooldown gate.
+                let idleKey = hook.hookType + ":" + trigger
+                if let last = lastIdleFireByTrigger[idleKey],
+                   Date().timeIntervalSince(last) < threshold {
                     continue
                 }
                 if cooldownElapsed(hook, now: Date()) {
-                    fire(hookType: "idleThreshold", trigger: String(Int(effectiveIdle)))
-                    lastIdleFire = Date()
+                    fire(hookType: "idleThreshold", trigger: trigger)
+                    lastIdleFireByTrigger[idleKey] = Date()
                     break // Only fire one hook per check
                 }
             }
@@ -288,7 +296,7 @@ final class SystemEventRuntime {
             let thresholdRatio = Float(threshold / 100.0)
             if lastVolumeLevel < thresholdRatio && currentVolume >= thresholdRatio {
                 if cooldownElapsed(hook, now: Date()) {
-                    fire(hookType: "musicVolume", trigger: String(percentage))
+                    fire(hookType: "musicVolume", trigger: trigger)
                 }
             }
         }
@@ -400,14 +408,11 @@ final class SystemEventRuntime {
 
         // Fire hooks for state change or track change
         if stateChanged || trackChanged {
-            // Get bundle ID of the current media app from now playing info
-            var bundleID = ""
-            if let currentArtist = info?[MPMediaItemPropertyArtist] as? String {
-                bundleID = findBundleID(for: currentArtist)
-            }
-
+            // Every playback event treated as "any app" — no reliable
+            // bundle-ID source exists from MPMediaItemPropertyArtist matching
+            // against running apps' localizedName.
             let triggerValue = stateChanged ? "\(lastPlaybackState.rawValue)->\(currentState.rawValue)" : "trackChange"
-            let fullTrigger = "\(bundleID):\(triggerValue)"
+            let fullTrigger = ":\(triggerValue)"
 
             fire(hookType: "musicPlayback", trigger: fullTrigger)
         }
@@ -417,16 +422,6 @@ final class SystemEventRuntime {
         lastTrackTitle = currentTitle
         lastTrackArtist = currentArtist
         lastTrackAlbum = currentAlbum
-    }
-
-    private func findBundleID(for appName: String) -> String {
-        let runningApps = NSWorkspace.shared.runningApplications
-        for app in runningApps {
-            if app.localizedName?.localizedCaseInsensitiveContains(appName) == true {
-                return app.bundleIdentifier ?? ""
-            }
-        }
-        return ""
     }
 
     /// Empty trigger matches anything (used by sleep/wake, which fire for
