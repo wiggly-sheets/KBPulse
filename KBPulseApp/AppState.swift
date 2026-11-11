@@ -35,6 +35,15 @@ final class AppState: ObservableObject {
             self.engine.stop()
             KBPPulseManager.restoreBacklightSettings()
         }
+        DistributedNotificationCenter.default().addObserver(
+            forName: NSNotification.Name("com.ethanrdoesmc.kbpulse.command"),
+            object: nil, queue: nil
+        ) { [weak self] note in
+            guard let self, let command = note.userInfo?["command"] as? String else { return }
+            DispatchQueue.main.async {
+                self.handleCLICommand(command, profile: note.userInfo?["profile"] as? String)
+            }
+        }
         try? FileManager.default.createDirectory(at: Self.themesDir, withIntermediateDirectories: true)
         HookStore.ensureFile()
         if !FileManager.default.fileExists(atPath: Self.themesDir.appendingPathComponent("Yawn.json").path) {
@@ -134,6 +143,26 @@ final class AppState: ObservableObject {
         guard overrides.removeValue(forKey: owner) != nil else { return }
         overrideOrder.removeAll { $0 == owner }
         updateOverrideTheme()
+    }
+
+    // MARK: - CLI relay
+
+    /// Handles a command posted by the `kbpulse` CLI over a distributed
+    /// notification. Unknown or missing profile names are ignored.
+    private func handleCLICommand(_ command: String, profile: String?) {
+        switch command {
+        case "set":
+            guard let profile, themes.contains(profile) else { return }
+            if !engineOn { setEngine(true) }
+            selectTheme(profile)
+        case "off":
+            setEngine(false)
+        case "flash":
+            guard engineOn else { return }
+            engine.flash()
+        default:
+            break
+        }
     }
 
     // MARK: - Launch at login
