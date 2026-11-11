@@ -78,6 +78,28 @@ struct Hook: Codable, Hashable {
     var theme: String
     var enabled: Bool
     var cooldown: Double?
+
+    init(hookType: String, trigger: String = "", action: String = "",
+         theme: String = "", enabled: Bool = false, cooldown: Double? = nil) {
+        self.hookType = hookType
+        self.trigger = trigger
+        self.action = action
+        self.theme = theme
+        self.enabled = enabled
+        self.cooldown = cooldown
+    }
+
+    // Decode with defaults for missing keys, so older/partial hooks.json
+    // entries still load.
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        hookType = try c.decodeIfPresent(String.self, forKey: .hookType) ?? ""
+        trigger = try c.decodeIfPresent(String.self, forKey: .trigger) ?? ""
+        action = try c.decodeIfPresent(String.self, forKey: .action) ?? ""
+        theme = try c.decodeIfPresent(String.self, forKey: .theme) ?? ""
+        enabled = try c.decodeIfPresent(Bool.self, forKey: .enabled) ?? false
+        cooldown = try c.decodeIfPresent(Double.self, forKey: .cooldown)
+    }
 }
 
 enum HookStore {

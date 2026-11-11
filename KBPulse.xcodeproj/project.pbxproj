@@ -31,6 +31,7 @@
 		6D53FC538EF44A389BFF47D7 /* SystemEventRuntime.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0B98408AB084499A3DA8A9F /* SystemEventRuntime.swift */; };
 		C1D2E3F4A5B6C7D8E9F0A1B4 /* SystemVolumeClient.m in Sources */ = {isa = PBXBuildFile; fileRef = C1D2E3F4A5B6C7D8E9F0A1B5 /* SystemVolumeClient.m */; };
 		C1D2E3F4A5B6C7D8E9F0A1B6 /* CoreAudio.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = B8F9E3C1A2B3D4E5F6A7B8C9 /* CoreAudio.framework */; };
+		4F9B00000000000000000027 /* KBPulseAppTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F9B00000000000000000028 /* KBPulseAppTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXShellScriptBuildPhase section */
@@ -50,8 +51,23 @@
 		};
 /* End PBXShellScriptBuildPhase section */
 
+/* Begin PBXContainerItemProxy section */
+		4F9B0000000000000000002D /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 4FF354A327209F3D00F7F65E /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 4F9B00000000000000000017;
+			remoteInfo = KBPulseApp;
+		};
+/* End PBXContainerItemProxy section */
+
 /* Begin PBXTargetDependency section */
 		4F9B00000000000000000022 /* KBPulse */ = {isa = PBXTargetDependency; target = 4FF354AA27209F3D00F7F65E /* KBPulse */; };
+		4F9B0000000000000000002E /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 4F9B00000000000000000017 /* KBPulseApp */;
+			targetProxy = 4F9B0000000000000000002D /* PBXContainerItemProxy */;
+		};
 /* End PBXTargetDependency section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -101,6 +117,8 @@
 		4FF355922722124900F7F65E /* LICENSE */ = {isa = PBXFileReference; lastKnownFileType = text; path = LICENSE; sourceTree = "<group>"; };
 		4FF3559427221FBA00F7F65E /* LOGO.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = LOGO.png; sourceTree = "<group>"; };
 		B8F9E3C1A2B3D4E5F6A7B8C9 /* CoreAudio.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; path = /System/Library/Frameworks/CoreAudio.framework; sourceTree = "<absolute>"; };
+		4F9B00000000000000000028 /* KBPulseAppTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KBPulseAppTests.swift; sourceTree = "<group>"; };
+		4F9B00000000000000000029 /* KBPulseAppTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = KBPulseAppTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -121,6 +139,15 @@
 		};
 /* End PBXFrameworksBuildPhase section */
 
+/* Begin PBXFrameworksBuildPhase (test target) */
+		4F9B0000000000000000002C /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+
 /* Begin PBXGroup section */
 		4FF354A227209F3D00F7F65E = {
 			isa = PBXGroup;
@@ -130,6 +157,7 @@
 				4FF355912722124900F7F65E /* README.md */,
 				4FF354AD27209F3D00F7F65E /* KBPulse */,
 				4F9B00000000000000000018 /* KBPulseApp */,
+				4F9B0000000000000000002A /* KBPulseAppTests */,
 				4FF354AC27209F3D00F7F65E /* Products */,
 			);
 			sourceTree = "<group>";
@@ -139,6 +167,7 @@
 			children = (
 				4FF354AB27209F3D00F7F65E /* KBPulse */,
 				4F9B00000000000000000013 /* KBPulseApp.app */,
+				4F9B00000000000000000029 /* KBPulseAppTests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -185,6 +214,14 @@
 			path = KBPulseApp;
 			sourceTree = "<group>";
 		};
+		4F9B0000000000000000002A /* KBPulseAppTests */ = {
+			isa = PBXGroup;
+			children = (
+				4F9B00000000000000000028 /* KBPulseAppTests.swift */,
+			);
+			path = KBPulseAppTests;
+			sourceTree = "<group>";
+		};
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
@@ -224,6 +261,23 @@
 			productReference = 4F9B00000000000000000013 /* KBPulseApp.app */;
 			productType = "com.apple.product-type.application";
 		};
+		4F9B0000000000000000002F /* KBPulseAppTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 4F9B00000000000000000033 /* Build configuration list for PBXNativeTarget "KBPulseAppTests" */;
+			buildPhases = (
+				4F9B0000000000000000002B /* Sources */,
+				4F9B0000000000000000002C /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				4F9B0000000000000000002E /* PBXTargetDependency */,
+			);
+			name = KBPulseAppTests;
+			productName = KBPulseAppTests;
+			productReference = 4F9B00000000000000000029 /* KBPulseAppTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -238,6 +292,10 @@
 					};
 					4F9B00000000000000000017 = {
 						CreatedOnToolsVersion = 27.2;
+					};
+					4F9B0000000000000000002F = {
+						CreatedOnToolsVersion = 27.2;
+						TestTargetID = 4F9B00000000000000000017;
 					};
 				};
 			};
@@ -256,6 +314,7 @@
 			targets = (
 				4FF354AA27209F3D00F7F65E /* KBPulse */,
 				4F9B00000000000000000017 /* KBPulseApp */,
+				4F9B0000000000000000002F /* KBPulseAppTests */,
 			);
 		};
 /* End PBXProject section */
@@ -309,6 +368,14 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		4F9B0000000000000000002B /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				4F9B00000000000000000027 /* KBPulseAppTests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin XCBuildConfiguration section */
@@ -349,6 +416,38 @@
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_OBJC_BRIDGING_HEADER = "KBPulseApp/KBPulse-Bridging-Header.h";
 				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
+		4F9B00000000000000000031 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_IDENTITY = "-";
+				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "-";
+				CODE_SIGN_STYLE = Automatic;
+				GENERATE_INFOPLIST_FILE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 13.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.ethanrdoesmc.kbpulseapptests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_VERSION = 5.0;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/KBPulseApp.app/Contents/MacOS/KBPulseApp";
+			};
+			name = Debug;
+		};
+		4F9B00000000000000000032 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_IDENTITY = "-";
+				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "-";
+				CODE_SIGN_STYLE = Automatic;
+				GENERATE_INFOPLIST_FILE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 13.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.ethanrdoesmc.kbpulseapptests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_VERSION = 5.0;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/KBPulseApp.app/Contents/MacOS/KBPulseApp";
 			};
 			name = Release;
 		};
@@ -518,6 +617,15 @@
 			buildConfigurations = (
 				4F9B00000000000000000019 /* Debug */,
 				4F9B0000000000000000001A /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		4F9B00000000000000000033 /* Build configuration list for PBXNativeTarget "KBPulseAppTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				4F9B00000000000000000031 /* Debug */,
+				4F9B00000000000000000032 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
