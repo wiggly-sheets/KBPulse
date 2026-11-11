@@ -239,7 +239,7 @@ final class Engine {
         overlayLock.unlock()
         // A flash queued during stop must not fire after cancellation.
         guard isCurrent(id) else { return false }
-        ov?()
+        ov?(id)
         return re.run(cfg: cfg, stale: { [weak self] in self?.isCurrent(id) != true })
     }
 }

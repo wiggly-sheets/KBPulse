@@ -205,7 +205,7 @@ struct ThemesTab: View {
                             let profile = KBPProfile(fileURL: url)
                             let prevTheme = state.effectiveTheme
                             var prevReactive: ReactiveMode?
-                            if let prevTheme {
+                            if !prevTheme.isEmpty {
                                 let prevURL = AppState.themesDir.appendingPathComponent("\(prevTheme).json")
                                 if let raw = try? ThemeStore.rawDictionary(at: prevURL) {
                                     prevReactive = ReactiveMode(forEngine: raw)
