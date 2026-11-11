@@ -308,11 +308,16 @@ enum HookStore {
     /// Every trigger basename across enabled agent hooks, used to populate
     /// the process-table scan.
     static func monitoredNames() -> [String] {
-        let names = load()
+        monitoredNames(from: load())
+    }
+
+    /// Returns monitored names from a provided hooks array (for testing).
+    static func monitoredNames(from hooks: [Hook]) -> [String] {
+        hooks
             .filter { $0.enabled && isAgentType($0.hookType) }
             .map(\.trigger)
             .filter { !$0.isEmpty }
-        return Array(Set(names)).sorted()
+            .uniqueSorted()
     }
 
     /// Hooks of one event class, used by SystemEventRuntime.
@@ -324,5 +329,11 @@ enum HookStore {
     /// ignoring case. Agent triggers are executable basenames.
     static func hooks(ofType type: String, matching name: String) -> [Hook] {
         hooks(ofType: type).filter { $0.trigger.caseInsensitiveCompare(name) == .orderedSame }
+    }
+}
+
+private extension Sequence where Element == String {
+    func uniqueSorted() -> [String] {
+        Array(Set(self)).sorted()
     }
 }
