@@ -13,7 +13,7 @@ struct KBPulseApp: App {
         MenuBarExtra {
             MenuContent(state: state)
         } label: {
-            Image(systemName: "􀇮")
+            Image(systemName: "keyboard")
                 .foregroundStyle(.primary)
         }
         .menuBarExtraStyle(.menu)
