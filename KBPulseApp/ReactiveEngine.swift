@@ -122,7 +122,7 @@ final class ReactiveEngine {
         if let timer { CFRunLoopAddTimer(CFRunLoopGetCurrent(), timer, .defaultMode) }
         KBPAnimator.setBrightness(Float(min(1, max(0, cfg.floor))), withDuration: 2500)
         lastTapCheck = 0
-        CFRunLoopRun():
+        CFRunLoopRun()
 
         // Teardown: the run loop stopped because the run became stale.
         if let timer { CFRunLoopRemoveTimer(CFRunLoopGetCurrent(), timer, .defaultMode) }

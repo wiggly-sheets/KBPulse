@@ -109,13 +109,17 @@ struct SettingsView: View {
                     Label("Active agents", systemImage: "terminal")
                     Spacer()
                     if !state.activeAgents.isEmpty {
-                        ForEach(state.activeAgents, id: \.self) { agent in
-                            Text(agent)
-                                .font(.caption)
-                                .padding(.horizontal, 8)
-                                .padding(.vertical, 3)
-                                .background(Capsule().fill(.quaternary))
-                                .foregroundStyle(.primary)
+                        KBGlassContainer(spacing: 8) {
+                            HStack(spacing: 8) {
+                                ForEach(state.activeAgents, id: \.self) { agent in
+                                    Text(agent)
+                                        .font(.caption)
+                                        .padding(.horizontal, 8)
+                                        .padding(.vertical, 3)
+                                        .kbGlassCapsule()
+                                        .foregroundStyle(.primary)
+                                }
+                            }
                         }
                     } else if state.activeAgents.isEmpty {
                         Image(systemName: "ellipsis.circle")
@@ -166,6 +170,7 @@ private struct CLIView: View {
                     Button("Refresh PATH") {
                         state.refreshCLIStatus()
                     }
+                    .kbGlassButtonStyle()
                 }
             }
             if state.cliInstalledPath == nil || true {
@@ -176,6 +181,7 @@ private struct CLIView: View {
                         state.refreshCLIStatus()
                     }
                 }
+                .kbGlassButtonStyle(prominent: true)
             }
             Text("The CLI runs the same engine as the app. Use it for scripts, launchers, keyboard shortcuts.")
                 .font(.footnote)
@@ -246,6 +252,7 @@ private struct HooksTab: View {
                     Button("Rescan Agents") {
                         state.updateAgentDetection()
                     }
+                    .kbGlassButtonStyle()
                 }
                 if hooks.isEmpty && !loadFailed {
                     Text("No hooks configured. Add one below; the file is created if needed.")
@@ -287,6 +294,7 @@ private struct HooksTab: View {
             Section {
                 Button("Add hook") { add() }
                     .disabled(loadFailed)
+                    .kbGlassButtonStyle(prominent: true)
                 Text("Default hooks are created automatically on first launch. The file lives at ~/Documents/KBPulse/hooks.json and the runtime reads it fresh.")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
@@ -642,6 +650,7 @@ private struct HookEditor: View {
                     }
                     Spacer()
                     Button("Cancel") { dismiss() }
+                        .kbGlassButtonStyle()
                     Button("Save") {
                         guard !saved else { return }
                         if !HookStore.validate(trigger: draft.trigger, action: draft.action) {
@@ -656,6 +665,7 @@ private struct HookEditor: View {
                         }
                     }
                     .keyboardShortcut(.defaultAction)
+                    .kbGlassButtonStyle(prominent: true)
                 }
             }
         }

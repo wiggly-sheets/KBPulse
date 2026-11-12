@@ -157,12 +157,16 @@ struct ThemesTab: View {
                         .lineLimit(nil)
                     Button("Duplicate") { showDuplicate = true }
                         .disabled(selected.isEmpty || newName.trimmingCharacters(in: .whitespaces).isEmpty)
+                        .kbGlassButtonStyle()
                 }
                 HStack {
                     Button("Import…") { importPanel() }
+                        .kbGlassButtonStyle()
                     Button("Export…") { exportPanel() }.disabled(selected.isEmpty)
+                        .kbGlassButtonStyle()
                     Spacer()
                     Button("Save") { save() }.disabled(selected.isEmpty)
+                        .kbGlassButtonStyle(prominent: true)
                 }
             }
             Section("Details") {
@@ -188,12 +192,12 @@ struct ThemesTab: View {
                     }
                     .padding(.vertical, 4)
                     .padding(.horizontal, 8)
-                    .background(RoundedRectangle(cornerRadius: 6).fill(.quaternary.opacity(0.3)))
+                    .kbGlassSurface(cornerRadius: 10)
                 }
                 Button("Add animation") {
                     doc.animations.append(ThemeDoc.AnimDoc(name: "New Animation", comment: "", brightness: 0.5, fade: 500, delay: 0))
                 }
-                .buttonStyle(.bordered)
+                .kbGlassButtonStyle()
                 .help("Adds a new animation to the end of the list")
             }
             Section("Live Preview") {
@@ -222,8 +226,9 @@ struct ThemesTab: View {
                             }
                         }
                         .disabled(selected.isEmpty || (doc.animations.isEmpty && !doc.hasReactive))
+                        .kbGlassButtonStyle()
                         Button("Show brightness curve") { showBrightnessCurve.toggle() }
-                            .buttonStyle(.bordered)
+                            .kbGlassButtonStyle()
                     }
                     if showBrightnessCurve {
                         BrightnessCurveView(animations: doc.animations)
@@ -267,6 +272,7 @@ struct ThemesTab: View {
                     }
                     if !permissionGranted {
                         Button("Enable typing reactions") { openAccessibilitySettings() }
+                            .kbGlassButtonStyle()
                         Text("Typing-reactive themes need Accessibility permission to observe keystrokes. Without it they rest at zero brightness.")
                             .font(.footnote)
                             .foregroundStyle(.secondary)
@@ -542,6 +548,6 @@ private struct BrightnessCurveView: View {
                 }
             }
         }
-        .background(RoundedRectangle(cornerRadius: 6).fill(Color(NSColor.controlBackgroundColor)))
+        .kbGlassSurface(cornerRadius: 8)
     }
 }
