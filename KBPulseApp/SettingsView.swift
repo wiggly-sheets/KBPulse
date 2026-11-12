@@ -42,6 +42,7 @@ private func mergedDiagnostics(for hook: Hook) -> HookDiagnostics? {
 
 struct SettingsView: View {
     @ObservedObject var state: AppState
+    @State private var showRestartWarning = false
 
     var body: some View {
         TabView {
@@ -73,10 +74,19 @@ struct SettingsView: View {
                     }
                 }
                 .pickerStyle(.menu)
+                .onChange(of: state.iconDisplayMode) { _ in
+                    showRestartWarning = true
+                }
                 Text("Choose how to display icons: dock, menu bar, both, or neither.")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
+                if showRestartWarning {
+                    Text("Changing Icon Display Mode requires an app restart.")
+                        .font(.footnote)
+                        .foregroundStyle(.orange)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
             }
             Section("Accessibility & Runtime") {
                 HStack {
@@ -158,16 +168,8 @@ private struct CLIView: View {
                     }
                 }
             }
-            if state.cliInstalledPath == nil {
-                Button("Install kbpulse to ~/.local/bin") {
-                    let result = CLISymlinkManager.installWithStatus()
-                    cliInstallMessage = result.message
-                    if result.isSuccess {
-                        state.refreshCLIStatus()
-                    }
-                }
-            } else {
-                Button("Reinstall") {
+            if state.cliInstalledPath == nil || true {
+                Button(state.cliInstalledPath == nil ? "Install kbpulse to ~/.local/bin" : "Reinstall") {
                     let result = CLISymlinkManager.installWithStatus()
                     cliInstallMessage = result.message
                     if result.isSuccess {
@@ -239,6 +241,12 @@ private struct HooksTab: View {
     var body: some View {
         Form {
             Section("Hooks") {
+                HStack {
+                    Spacer()
+                    Button("Rescan Agents") {
+                        state.updateAgentDetection()
+                    }
+                }
                 if hooks.isEmpty && !loadFailed {
                     Text("No hooks configured. Add one below; the file is created if needed.")
                         .font(.footnote)
@@ -636,6 +644,10 @@ private struct HookEditor: View {
                     Button("Cancel") { dismiss() }
                     Button("Save") {
                         guard !saved else { return }
+                        if !HookStore.validate(trigger: draft.trigger, action: draft.action) {
+                            error = "Trigger and action must not be empty."
+                            return
+                        }
                         if let message = onSave(draft) {
                             error = message
                         } else {

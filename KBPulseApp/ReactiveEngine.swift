@@ -7,11 +7,14 @@
 //  Requires Accessibility permission; when the tap cannot start, the caller
 //  falls back to the theme's animation loop or fades the backlight off.
 //
+//
 
 import ApplicationServices
 import Foundation
+import os.log
 
 final class ReactiveEngine {
+    private static let log = OSLog(subsystem: "com.kbpulse.app", category: "ReactiveEngine")
     // Mutable state shared between the tap callback and the decay timer.
     private final class State {
         let lock = NSLock()
@@ -54,6 +57,7 @@ final class ReactiveEngine {
     func impulse(amount: Double) {
         stateLock.lock()
         guard let s = state else {
+            os_log("impulse dropped: inactive state", log: Self.log, type: .debug)
             pendingImpulse = amount
             stateLock.unlock()
             return
@@ -116,10 +120,9 @@ final class ReactiveEngine {
             self?.tick()
         }
         if let timer { CFRunLoopAddTimer(CFRunLoopGetCurrent(), timer, .defaultMode) }
-
         KBPAnimator.setBrightness(Float(min(1, max(0, cfg.floor))), withDuration: 2500)
         lastTapCheck = 0
-        CFRunLoopRun()
+        CFRunLoopRun():
 
         // Teardown: the run loop stopped because the run became stale.
         if let timer { CFRunLoopRemoveTimer(CFRunLoopGetCurrent(), timer, .defaultMode) }
@@ -145,7 +148,11 @@ final class ReactiveEngine {
             if let tap { CGEvent.tapEnable(tap: tap, enable: true) }
         }
         guard let stale = self.stale, !stale() else { CFRunLoopStop(CFRunLoopGetCurrent()); return }
-        guard let s = currentState() else { CFRunLoopStop(CFRunLoopGetCurrent()); return }
+        guard let s = currentState() else {
+            os_log("tick dropped: inactive state", log: Self.log, type: .debug)
+            CFRunLoopStop(CFRunLoopGetCurrent())
+            return
+        }
         s.lock.lock()
         let cfg = s.cfg
         let amount = s.amount

@@ -268,6 +268,14 @@ enum HookStore {
         return nil
     }
 
+    /// Public validator for a trigger/action pair.
+    static func validate(trigger: String, action: String) -> Bool {
+        // Validation of type is deferred to the caller's context (e.g. SettingsView)
+        // because type is part of the hook definition, not just trigger/action.
+        // This is a minimal helper for field validation.
+        !trigger.isEmpty && !action.isEmpty
+    }
+
     /// All enabled hooks, or [] when the file is missing/invalid.
     /// Per-field lenient decoding keeps the rest of the file usable when one
     /// hook has a wrong-typed field.

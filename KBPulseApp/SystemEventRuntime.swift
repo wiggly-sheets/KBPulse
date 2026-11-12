@@ -408,9 +408,10 @@ final class SystemEventRuntime {
 
         // Fire hooks for state change or track change
         if stateChanged || trackChanged {
-            // Every playback event treated as "any app" — no reliable
-            // bundle-ID source exists from MPMediaItemPropertyArtist matching
-            // against running apps' localizedName.
+            // Every playback event treated as "any app" — the macOS MediaPlayer
+            // API does not expose bundle identifiers for the running media app.
+            // Using an empty trigger ("") matches all apps, which is the best
+            // approximation given API limitations.
             let triggerValue = stateChanged ? "\(lastPlaybackState.rawValue)->\(currentState.rawValue)" : "trackChange"
             let fullTrigger = ":\(triggerValue)"
 
