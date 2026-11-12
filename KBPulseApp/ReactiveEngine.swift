@@ -165,7 +165,7 @@ final class ReactiveEngine {
         if elapsed >= Double(cfg.decay) {
             // Write the resting level once, then stop writing until the next
             // event. Keep `hasEvent` if a newer bump landed during this tick.
-            KBPAnimator.setBrightness(Float(min(1, cfg.floor)), withDuration: 0)
+            KBPAnimator.setBrightness(Float(min(1, max(0, cfg.floor))), withDuration: 0)
             s.lock.lock()
             if s.seq == seq { s.hasEvent = false }
             s.lock.unlock()

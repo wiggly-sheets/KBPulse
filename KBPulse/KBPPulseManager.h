@@ -21,6 +21,8 @@ NS_ASSUME_NONNULL_BEGIN
 +(KeyboardBrightnessClient *)brightnessClient;
 +(NSString *)configurationFile;
 +(void)restoreBacklightSettings;
+/// Restores settings left modified by a previous run that did not quit cleanly.
++(void)restoreOrphanedSettings;
 +(unsigned long long)keyboardID;
 @end
 

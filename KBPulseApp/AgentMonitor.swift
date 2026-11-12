@@ -20,19 +20,37 @@ enum AgentMonitor {
     private static let refreshQueue = DispatchQueue(label: "com.kbpulse.agentmonitor")
     private static let cacheLock = NSLock()
     private static var _cachedScanResult: Set<String>? = nil
+    private static var _cacheDate: Date?
+    private static var _scanInFlight = false
+
+    /// How long a cached scan is considered fresh. Reads older than this kick
+    /// off a background refresh and keep serving the previous result.
+    private static let maxCacheAge: TimeInterval = 1.5
 
     static var activeAgents: [String]? {
         let names = Set(HookStore.monitoredNames().map { $0.lowercased() })
         guard !names.isEmpty else { return [] }
-        // First read after launch runs one synchronous scan and caches it;
-        // later reads use the cache kept warm by the timer's refreshAsync.
+
         cacheLock.lock()
-        if _cachedScanResult == nil {
-            cacheLock.unlock()
+        let needsInitialScan = _cachedScanResult == nil
+        cacheLock.unlock()
+
+        if needsInitialScan {
+            // First read after launch blocks once so the UI has data. Later
+            // reads never block: they use the cache and refresh in the
+            // background when stale.
             let fresh = scan()
             cacheLock.lock()
-            _cachedScanResult = fresh
+            if let fresh {
+                _cachedScanResult = fresh
+                _cacheDate = Date()
+            }
+            cacheLock.unlock()
+        } else {
+            refreshIfStale()
         }
+
+        cacheLock.lock()
         let scanned = _cachedScanResult
         cacheLock.unlock()
         guard let scanned else { return nil }
@@ -41,12 +59,34 @@ enum AgentMonitor {
 
     /// Runs a fresh `ps` scan on a background queue and caches the result so
     /// future `activeAgents` reads do not block the caller's thread.
+    /// Coalesces concurrent requests so a slow scan cannot queue up work.
     static func refreshAsync() {
+        cacheLock.lock()
+        guard !_scanInFlight else {
+            cacheLock.unlock()
+            return
+        }
+        _scanInFlight = true
+        cacheLock.unlock()
+
         refreshQueue.async {
             let fresh = scan()
             cacheLock.lock()
-            _cachedScanResult = fresh
+            if let fresh {
+                _cachedScanResult = fresh
+                _cacheDate = Date()
+            }
+            _scanInFlight = false
             cacheLock.unlock()
+        }
+    }
+
+    private static func refreshIfStale() {
+        cacheLock.lock()
+        let age = _cacheDate.map { Date().timeIntervalSince($0) } ?? .infinity
+        cacheLock.unlock()
+        if age > maxCacheAge {
+            refreshAsync()
         }
     }
 

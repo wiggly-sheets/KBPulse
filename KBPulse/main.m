@@ -79,7 +79,9 @@ int main(int argc, const char * argv[]) {
         [KBPProfile createYawnJSON];
         KBPProfile * myProfile = [[KBPProfile alloc]  initWithFileURL:[[NSFileManager.defaultManager URLsForDirectory:NSDocumentDirectory inDomains:NSUserDomainMask][0] URLByAppendingPathComponent:[KBPPulseManager configurationFile]]];
 
-        [NSTimer scheduledTimerWithTimeInterval:[myProfile totalDuration].doubleValue repeats:true block:^(NSTimer * _Nonnull timer) {
+        double interval = [myProfile totalDuration].doubleValue;
+        if (interval <= 0) interval = 1.0;
+        [NSTimer scheduledTimerWithTimeInterval:interval repeats:true block:^(NSTimer * _Nonnull timer) {
             for (KBPAnimation * animation in myProfile.animations) {
                 [KBPAnimator setBrightness:animation.brightness.floatValue withDuration:animation.fadeDuration.intValue];
                 [NSThread sleepForTimeInterval:(animation.totalDuration.doubleValue)/1000];
@@ -88,8 +90,12 @@ int main(int argc, const char * argv[]) {
         }];
     dispatch_source_t signalSourceInt = dispatch_source_create(DISPATCH_SOURCE_TYPE_SIGNAL, SIGINT, 0, dispatch_get_main_queue());
     dispatch_source_t signalSourceTerm = dispatch_source_create(DISPATCH_SOURCE_TYPE_SIGNAL, SIGTERM, 0, dispatch_get_main_queue());
+    // Closing a terminal sends SIGHUP, which previously left idle dimming
+    // disabled because only INT/TERM were handled.
+    dispatch_source_t signalSourceHup = dispatch_source_create(DISPATCH_SOURCE_TYPE_SIGNAL, SIGHUP, 0, dispatch_get_main_queue());
     signal(SIGINT, SIG_IGN);
     signal(SIGTERM, SIG_IGN);
+    signal(SIGHUP, SIG_IGN);
     dispatch_source_set_event_handler(signalSourceInt, ^{
         [KBPPulseManager restoreBacklightSettings];
         exit(0);
@@ -98,8 +104,13 @@ int main(int argc, const char * argv[]) {
         [KBPPulseManager restoreBacklightSettings];
         exit(0);
     });
+    dispatch_source_set_event_handler(signalSourceHup, ^{
+        [KBPPulseManager restoreBacklightSettings];
+        exit(0);
+    });
     dispatch_resume(signalSourceInt);
     dispatch_resume(signalSourceTerm);
+    dispatch_resume(signalSourceHup);
     }
     [[NSRunLoop currentRunLoop] run];
     return 0;

@@ -25,11 +25,97 @@ import Cocoa
 import CoreGraphics
 import Darwin
 import Foundation
-import MediaPlayer
 
 struct HookDiagnostics {
     var lastFired: Date?
     var skipped: Int
+}
+
+/// Reads the system-wide Now Playing session. The public MediaPlayer API only
+/// exposes the calling app's own session, so KBPulse loads MediaRemote the
+/// same way it loads CoreBrightness. If the framework or its symbols are not
+/// available, playback hooks simply stay dormant.
+private enum MediaRemoteClient {
+    private typealias GetInfo = @convention(c) (
+        DispatchQueue,
+        @escaping @convention(block) (CFDictionary?) -> Void
+    ) -> Void
+
+    private typealias GetIsPlaying = @convention(c) (
+        DispatchQueue,
+        @escaping @convention(block) (Bool) -> Void
+    ) -> Void
+
+    private enum Key {
+        static let title = "kMRMediaRemoteNowPlayingInfoTitle"
+        static let artist = "kMRMediaRemoteNowPlayingInfoArtist"
+        static let album = "kMRMediaRemoteNowPlayingInfoAlbum"
+    }
+
+    private static let frameworkHandle: UnsafeMutableRawPointer? = dlopen(
+        "/System/Library/PrivateFrameworks/MediaRemote.framework/MediaRemote",
+        RTLD_LAZY)
+
+    private static let getInfo: GetInfo? = {
+        guard let frameworkHandle,
+              let symbol = dlsym(frameworkHandle, "MRMediaRemoteGetNowPlayingInfo") else {
+            return nil
+        }
+        return unsafeBitCast(symbol, to: GetInfo.self)
+    }()
+
+    private static let getIsPlaying: GetIsPlaying? = {
+        guard let frameworkHandle,
+              let symbol = dlsym(frameworkHandle, "MRMediaRemoteGetNowPlayingApplicationIsPlaying") else {
+            return nil
+        }
+        return unsafeBitCast(symbol, to: GetIsPlaying.self)
+    }()
+
+    static var isAvailable: Bool { getInfo != nil }
+
+    /// Fetches the now-playing dictionary and playback state, then calls
+    /// `completion` on the main queue.
+    static func fetch(completion: @escaping ([String: Any]?, Bool) -> Void) {
+        guard let getInfo else {
+            completion(nil, false)
+            return
+        }
+        let callbackQueue = DispatchQueue(label: "com.kbpulse.mediaremote.callback")
+        let group = DispatchGroup()
+        var info: [String: Any]?
+        var isPlaying = false
+
+        group.enter()
+        getInfo(callbackQueue) { dictionary in
+            info = dictionary as? [String: Any]
+            group.leave()
+        }
+
+        if let getIsPlaying {
+            group.enter()
+            getIsPlaying(callbackQueue) { playing in
+                isPlaying = playing
+                group.leave()
+            }
+        }
+
+        group.notify(queue: .main) {
+            completion(info, isPlaying)
+        }
+    }
+
+    static func title(from info: [String: Any]?) -> String {
+        info?[Key.title] as? String ?? ""
+    }
+
+    static func artist(from info: [String: Any]?) -> String {
+        info?[Key.artist] as? String ?? ""
+    }
+
+    static func album(from info: [String: Any]?) -> String {
+        info?[Key.album] as? String ?? ""
+    }
 }
 
 final class SystemEventRuntime {
@@ -56,19 +142,27 @@ final class SystemEventRuntime {
     private var lastVolumeLevel: Float = 0.0
     // Music playback monitoring
     private var musicPlaybackTimer: Timer?
-    private var lastPlaybackState: MPNowPlayingPlaybackState = .stopped
-    private var lastTrackTitle: String = ""
-    private var lastTrackArtist: String = ""
-    private var lastTrackAlbum: String = ""
+    private var lastPlaybackIsPlaying = false
+    private var lastTrackTitle = ""
+    private var lastTrackArtist = ""
+    private var lastTrackAlbum = ""
+    private var playbackSeeded = false
+    private var playbackFetchInFlight = false
 
     func start(in state: AppState) {
         self.state = state
         wasAsleep = false
         lastFired = [:]
         diagnostics = [:]
-        lastFrontmostApp = nil
-        lastScreenLocked = false
+        lastFrontmostApp = workspace.frontmostApplication?.bundleIdentifier
+        lastScreenLocked = currentScreenIsLocked()
         lastIdleFireByTrigger = [:]
+        lastPlaybackIsPlaying = false
+        lastTrackTitle = ""
+        lastTrackArtist = ""
+        lastTrackAlbum = ""
+        playbackSeeded = false
+        playbackFetchInFlight = false
         timer?.invalidate()
         timer = nil
         overrideTimer?.invalidate()
@@ -89,10 +183,13 @@ final class SystemEventRuntime {
             self?.pollDownloads()
         }
         if let timer { RunLoop.main.add(timer, forMode: .common) }
-        DistributedNotificationCenter.default().addObserver(
+        // Sleep/wake are NSWorkspace notifications, not distributed ones.
+        // Registering them on DistributedNotificationCenter meant they never
+        // fired.
+        workspace.notificationCenter.addObserver(
             self, selector: #selector(sleepNotification(_:)),
             name: NSWorkspace.willSleepNotification, object: nil)
-        DistributedNotificationCenter.default().addObserver(
+        workspace.notificationCenter.addObserver(
             self, selector: #selector(wakeNotification(_:)),
             name: NSWorkspace.didWakeNotification, object: nil)
         workspace.notificationCenter.addObserver(
@@ -126,8 +223,9 @@ final class SystemEventRuntime {
             self?.pollMusicPlayback()
         }
         if let musicPlaybackTimer { RunLoop.main.add(musicPlaybackTimer, forMode: .common) }
-        // Seed initial music playback state
-        seedMusicPlaybackState()
+        // Seed the initial playback state immediately; the first response is
+        // recorded without firing a hook.
+        pollMusicPlayback()
     }
 
     func stop() {
@@ -153,10 +251,12 @@ final class SystemEventRuntime {
         lastScreenLocked = false
         lastIdleFireByTrigger = [:]
         lastVolumeLevel = 0.0
-        lastPlaybackState = .stopped
+        lastPlaybackIsPlaying = false
         lastTrackTitle = ""
         lastTrackArtist = ""
         lastTrackAlbum = ""
+        playbackSeeded = false
+        playbackFetchInFlight = false
         state?.clearOverride(owner: "system")
     }
 
@@ -232,10 +332,14 @@ final class SystemEventRuntime {
 
     // MARK: - Screen lock / unlock polling
 
-    private func pollScreenLock() {
-        guard let state else { return }
+    private func currentScreenIsLocked() -> Bool {
         let session = CGSessionCopyCurrentDictionary()
-        let isLocked = (session as? [String: Any])?["CGSSessionScreenIsLocked"] as? Bool ?? false
+        return (session as? [String: Any])?["CGSSessionScreenIsLocked"] as? Bool ?? false
+    }
+
+    private func pollScreenLock() {
+        guard state != nil else { return }
+        let isLocked = currentScreenIsLocked()
         if isLocked != lastScreenLocked {
             lastScreenLocked = isLocked
             if isLocked {
@@ -249,10 +353,12 @@ final class SystemEventRuntime {
     // MARK: - Idle threshold polling
 
     private func pollIdle() {
-        guard let state else { return }
-        let idleTime = CGEventSource.secondsSinceLastEventType(CGEventSourceStateID.hidSystemState, eventType: CGEventType.leftMouseDown)
-        // Fallback: if leftMouseDown returns 0, try .leftMouseUp
-        let effectiveIdle = idleTime > 0 ? idleTime : CGEventSource.secondsSinceLastEventType(CGEventSourceStateID.hidSystemState, eventType: CGEventType.leftMouseUp)
+        guard state != nil else { return }
+        // `~0` is kCGAnyInputEventType: the time since *any* input (keyboard,
+        // mouse, trackpad). Tracking only leftMouseDown meant typing never
+        // reset the idle timer, so hooks could fire mid-keystroke.
+        let anyInput = CGEventType(rawValue: ~0) ?? .null
+        let effectiveIdle = CGEventSource.secondsSinceLastEventType(.combinedSessionState, eventType: anyInput)
         let hooks = HookStore.hooks(ofType: "idleThreshold")
         for hook in hooks {
             let trigger = hook.trigger.trimmingCharacters(in: .whitespaces)
@@ -277,10 +383,9 @@ final class SystemEventRuntime {
     // MARK: - Music volume polling
 
     private func pollMusicVolume() {
-        guard let state else { return }
+        guard state != nil else { return }
         let currentVolume = SystemVolumeClient.systemOutputVolume()
-        let percentage = Int(currentVolume * 100)
-        
+
         // Check for each musicVolume hook
         let hooks = HookStore.hooks(ofType: "musicVolume")
         for hook in hooks {
@@ -309,18 +414,15 @@ final class SystemEventRuntime {
         guard let state else { return }
         let now = Date()
         
-        // Special handling for musicPlayback: trigger format is "bundleID:eventType"
-        // Hook trigger is bundle ID (or empty for any). Match bundle ID portion.
+        // Playback hooks can only match "any player": the public MediaPlayer
+        // API does not expose the source app.
         let hooks = HookStore.hooks(ofType: hookType)
         guard let hook = hooks.first(where: { hook in
             let matchesTrigger: Bool
             if hookType == "musicPlayback" {
-                // Parse bundle ID from trigger (format: "bundleID:eventType")
-                let components = trigger.split(separator: ":", maxSplits: 1, omittingEmptySubsequences: false)
-                let eventBundleID = components.isEmpty ? "" : String(components[0])
-                let hookTrigger = hook.trigger.trimmingCharacters(in: .whitespaces)
-                // Empty hook trigger matches any bundle ID
-                matchesTrigger = hookTrigger.isEmpty || hookTrigger.caseInsensitiveCompare(eventBundleID) == .orderedSame
+                // The public MediaPlayer API does not expose the source app,
+                // so only an empty trigger ("any player") can ever match.
+                matchesTrigger = hook.trigger.trimmingCharacters(in: .whitespaces).isEmpty
             } else {
                 matchesTrigger = matches(hook.trigger, trigger)
             }
@@ -372,54 +474,52 @@ final class SystemEventRuntime {
 
     // MARK: - Music playback polling
 
-    private func seedMusicPlaybackState() {
-        let info = MPNowPlayingInfoCenter.default().nowPlayingInfo
-        // Try to get initial playback state from nowPlayingInfo
-        if let state = info?[MPNowPlayingInfoPropertyPlaybackRate] as? NSNumber {
-            lastPlaybackState = state.doubleValue > 0 ? .playing : .paused
-        } else {
-            lastPlaybackState = .stopped
+    private func pollMusicPlayback() {
+        guard state != nil else { return }
+        guard MediaRemoteClient.isAvailable else { return }
+        // MediaRemote completes asynchronously; skip a tick rather than queue
+        // overlapping requests.
+        guard !playbackFetchInFlight else { return }
+        playbackFetchInFlight = true
+        MediaRemoteClient.fetch { [weak self] info, isPlaying in
+            guard let self else { return }
+            self.playbackFetchInFlight = false
+            self.handlePlayback(info: info, isPlaying: isPlaying)
         }
-        lastTrackTitle = info?[MPMediaItemPropertyTitle] as? String ?? ""
-        lastTrackArtist = info?[MPMediaItemPropertyArtist] as? String ?? ""
-        lastTrackAlbum = info?[MPMediaItemPropertyAlbumTitle] as? String ?? ""
     }
 
-    private func pollMusicPlayback() {
-        guard let state else { return }
-        let info = MPNowPlayingInfoCenter.default().nowPlayingInfo
+    private func handlePlayback(info: [String: Any]?, isPlaying: Bool) {
+        let currentTitle = MediaRemoteClient.title(from: info)
+        let currentArtist = MediaRemoteClient.artist(from: info)
+        let currentAlbum = MediaRemoteClient.album(from: info)
 
-        // Get current playback state
-        var currentState: MPNowPlayingPlaybackState = .stopped
-        if let rate = info?[MPNowPlayingInfoPropertyPlaybackRate] as? NSNumber {
-            currentState = rate.doubleValue > 0 ? .playing : .paused
+        // The first response after launch seeds state without firing, so an
+        // already-playing track does not flash on startup.
+        guard playbackSeeded else {
+            playbackSeeded = true
+            lastPlaybackIsPlaying = isPlaying
+            lastTrackTitle = currentTitle
+            lastTrackArtist = currentArtist
+            lastTrackAlbum = currentAlbum
+            return
         }
 
-        // Get current track metadata
-        let currentTitle = info?[MPMediaItemPropertyTitle] as? String ?? ""
-        let currentArtist = info?[MPMediaItemPropertyArtist] as? String ?? ""
-        let currentAlbum = info?[MPMediaItemPropertyAlbumTitle] as? String ?? ""
+        let stateChanged = isPlaying != lastPlaybackIsPlaying
+        let trackChanged = currentTitle != lastTrackTitle
+            || currentArtist != lastTrackArtist
+            || currentAlbum != lastTrackAlbum
 
-        // Check for playback state change
-        let stateChanged = currentState != lastPlaybackState && lastPlaybackState != .stopped && currentState != .stopped
-
-        // Check for track change
-        let trackChanged = currentTitle != lastTrackTitle || currentArtist != lastTrackArtist || currentAlbum != lastTrackAlbum
-
-        // Fire hooks for state change or track change
         if stateChanged || trackChanged {
-            // Every playback event treated as "any app" — the macOS MediaPlayer
-            // API does not expose bundle identifiers for the running media app.
-            // Using an empty trigger ("") matches all apps, which is the best
-            // approximation given API limitations.
-            let triggerValue = stateChanged ? "\(lastPlaybackState.rawValue)->\(currentState.rawValue)" : "trackChange"
-            let fullTrigger = ":\(triggerValue)"
-
-            fire(hookType: "musicPlayback", trigger: fullTrigger)
+            // Music may be playing through any app. MediaRemote does not
+            // reliably expose the source bundle, so an empty trigger matches
+            // any player (the editor enforces this).
+            let triggerValue = stateChanged
+                ? (isPlaying ? "started" : "stopped")
+                : "trackChange"
+            fire(hookType: "musicPlayback", trigger: triggerValue)
         }
 
-        // Update last known state
-        lastPlaybackState = currentState
+        lastPlaybackIsPlaying = isPlaying
         lastTrackTitle = currentTitle
         lastTrackArtist = currentArtist
         lastTrackAlbum = currentAlbum

@@ -184,8 +184,9 @@ final class Engine {
             guard profile.animations.count > 0 else { return }
             for case let animation as KBPAnimation in profile.animations {
                 guard isCurrent(id) else { return }
-                KBPAnimator.setBrightness(Float(min(1, max(0, animation.brightness.floatValue))),
-                                          withDuration: Int32(animation.fadeDuration.intValue))
+                let brightness = Float(min(1, max(0, animation.brightness.floatValue)))
+                let fade = Int32(max(0, animation.fadeDuration.intValue))
+                KBPAnimator.setBrightness(brightness, withDuration: fade)
                 sleepChunks(max(animation.totalDuration().doubleValue / 1000, 0.05), id: id)
             }
         }

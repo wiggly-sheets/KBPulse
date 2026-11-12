@@ -14,7 +14,8 @@
     for (KBPAnimation * animation in _animations) {
         duration += animation.totalDuration.intValue;
     }
-    return @(duration/1000);
+    // Seconds, as a double. Integer division used to truncate 4.5 s to 4 s.
+    return @(((double)duration) / 1000.0);
 }
 
 -(id)initWithFileURL:(NSURL *)filePath {
@@ -77,9 +78,14 @@
 }
 
 +(void)createYawnJSON {
+    NSURL * directory = [[NSFileManager.defaultManager URLsForDirectory:NSDocumentDirectory inDomains:NSUserDomainMask][0] URLByAppendingPathComponent:@"/KBPulse/"];
+    NSURL * file = [directory URLByAppendingPathComponent:@"Yawn.json"];
+    // Never overwrite a user's edited Yawn theme. The CLI used to call this
+    // unconditionally, wiping customizations on every invocation.
+    if ([NSFileManager.defaultManager fileExistsAtPath:file.path]) return;
     KBPProfile * slowFadeProfile = [KBPProfile yawnProfile];
-    [NSFileManager.defaultManager createDirectoryAtURL:[[NSFileManager.defaultManager URLsForDirectory:NSDocumentDirectory inDomains:NSUserDomainMask][0] URLByAppendingPathComponent:@"/KBPulse/"] withIntermediateDirectories:true attributes:nil error:nil];
-    [slowFadeProfile writeToFileURL:[[NSFileManager.defaultManager URLsForDirectory:NSDocumentDirectory inDomains:NSUserDomainMask][0] URLByAppendingPathComponent:@"/KBPulse/Yawn.json"]];
+    [NSFileManager.defaultManager createDirectoryAtURL:directory withIntermediateDirectories:true attributes:nil error:nil];
+    [slowFadeProfile writeToFileURL:file];
 }
 
 @end

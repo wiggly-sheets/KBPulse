@@ -50,19 +50,16 @@ final class AppState: ObservableObject {
     }
 
     /// Tracks whether the app has Accessibility permission for key-event capture.
-    @Published private(set) var isAccessibilityGranted = false {
-        didSet { objectWillChange.send() }
-    }
+    @Published private(set) var isAccessibilityGranted = false
 
     /// Lists basenames of active coding agents detected in the process table.
-    @Published private(set) var activeAgents: [String] = [] {
-        didSet { objectWillChange.send() }
-    }
+    @Published private(set) var activeAgents: [String] = []
+    /// False when the process-table scan itself failed, as opposed to simply
+    /// finding no agents. The Settings UI distinguishes the two.
+    @Published private(set) var agentScanAvailable = true
 
     /// True when at least one system runtime timer is actively firing hooks.
-    @Published private(set) var hasSystemActivity = false {
-        didSet { objectWillChange.send() }
-    }
+    @Published private(set) var hasSystemActivity = false
     
     @Published var themes: [String] = []
     @Published private(set) var engineOn = true
@@ -71,6 +68,8 @@ final class AppState: ObservableObject {
     @Published private(set) var overrideTheme: String?
     @Published private(set) var cliInstalledPath: URL?
     @Published private(set) var cliOnPATH = false
+    /// Non-nil when the last login-item change failed.
+    @Published private(set) var loginItemError: String?
 
     let engine = Engine()
 
@@ -81,6 +80,13 @@ final class AppState: ObservableObject {
     private var overrides: [String: String] = [:]
     private var overrideOrder: [String] = []
 
+    /// Active temporary theme preview (see `previewTheme`). The temp file is
+    /// deleted when the preview ends.
+    private var previewWorkItem: DispatchWorkItem?
+    private var previewTempURL: URL?
+    private var previewPreviousTheme = ""
+    private var previewEngineWasOn = false
+
     static let themesDir: URL = {
         guard let dir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first else {
             return URL(fileURLWithPath: NSHomeDirectory())
@@ -90,11 +96,15 @@ final class AppState: ObservableObject {
 
     init() {
         KBPPulseManager.loadPrivateFrameworks()
+        // If a previous run crashed or was force-quit before restoring the
+        // user's keyboard settings, put them back before taking control again.
+        KBPPulseManager.restoreOrphanedSettings()
         NotificationCenter.default.addObserver(forName: NSApplication.didFinishLaunchingNotification, object: nil, queue: .main) { [weak self] _ in
             // Activation policy cannot be set reliably before the app launches.
             self?.applyActivationPolicy()
         }
         NotificationCenter.default.addObserver(forName: NSApplication.willTerminateNotification, object: nil, queue: nil) { [weak self] _ in
+            self?.stopPreview()
             self?.engine.stop()
             KBPPulseManager.restoreBacklightSettings()
         }
@@ -136,16 +146,19 @@ final class AppState: ObservableObject {
 
     /// Updates the accessibility-granted state exposed to the UI.
     func updateAccessibilityStatus() {
-        isAccessibilityGranted = ReactiveEngine.isAccessibilityGranted(prompt: false)
+        let granted = ReactiveEngine.isAccessibilityGranted(prompt: false)
+        if granted != isAccessibilityGranted { isAccessibilityGranted = granted }
     }
 
     /// Scans the process table and publishes active agent basenames.
     func updateAgentDetection() {
         if let agents = AgentMonitor.activeAgents {
-            activeAgents = agents
+            if activeAgents != agents { activeAgents = agents }
+            if !agentScanAvailable { agentScanAvailable = true }
         } else {
             // nil means scan failed; show empty so the UI displays "unavailable".
-            activeAgents = []
+            if !activeAgents.isEmpty { activeAgents = [] }
+            if agentScanAvailable { agentScanAvailable = false }
         }
     }
 
@@ -172,7 +185,7 @@ final class AppState: ObservableObject {
             .sorted()
         themes = names
         let saved = UserDefaults.standard.string(forKey: "selectedTheme")
-        selectedTheme = names.contains(saved ?? "\u{0}") ? (saved ?? "") : (names.first ?? saved ?? "")
+        selectedTheme = names.contains(saved ?? "\u{0}") ? (saved ?? "") : (names.first ?? "")
         if selectedTheme != saved {
             UserDefaults.standard.set(selectedTheme, forKey: "selectedTheme")
         }
@@ -193,6 +206,7 @@ final class AppState: ObservableObject {
 
     func setEngine(_ on: Bool) {
         guard on != engineOn else { return }
+        stopPreview()
         engineOn = on
         UserDefaults.standard.set(on, forKey: "engineEnabled")
         if on {
@@ -212,6 +226,7 @@ final class AppState: ObservableObject {
     func selectTheme(_ name: String) {
         guard themes.contains(name) else { return }
         guard name != selectedTheme || overrideTheme != nil else { return }
+        stopPreview()
         overrides.removeAll()
         overrideOrder.removeAll()
         overrideTheme = nil
@@ -263,7 +278,16 @@ final class AppState: ObservableObject {
     }
 
     func setLoginItem(_ on: Bool) {
-        if on { try? SMAppService.mainApp.register() } else { try? SMAppService.mainApp.unregister() }
+        do {
+            if on {
+                try SMAppService.mainApp.register()
+            } else {
+                try SMAppService.mainApp.unregister()
+            }
+            loginItemError = nil
+        } catch {
+            loginItemError = "Could not \(on ? "enable" : "disable") launch at login: \(error.localizedDescription)"
+        }
         objectWillChange.send()
     }
 
@@ -276,11 +300,75 @@ final class AppState: ObservableObject {
         NSApp.setActivationPolicy(policy)
     }
 
-    private func startEngine() {
-        let url = Self.themesDir.appendingPathComponent("\(effectiveTheme).json")
+    private func startEngine(for requestedTheme: String? = nil) {
+        // Any real engine switch supersedes a temporary preview.
+        discardPreviewBookkeeping()
+        let theme = requestedTheme ?? effectiveTheme
+        guard !theme.isEmpty else { return }
+        let url = Self.themesDir.appendingPathComponent("\(theme).json")
         guard FileManager.default.fileExists(atPath: url.path) else { return }
         let raw = (try? ThemeStore.rawDictionary(at: url)) ?? [:]
         engine.start(profile: KBPProfile(fileURL: url), reactive: ReactiveMode(forEngine: raw))
+    }
+
+    // MARK: - Temporary theme preview
+
+    /// Plays a theme file for `duration` seconds without changing the persisted
+    /// selection, then restores whatever was playing before. The file is
+    /// deleted when the preview ends.
+    func previewTheme(fileURL: URL, reactive: ReactiveMode?, duration: TimeInterval = 10) {
+        stopPreview()
+        previewTempURL = fileURL
+        previewPreviousTheme = effectiveTheme
+        previewEngineWasOn = engineOn
+        engine.stop()
+        engine.start(profile: KBPProfile(fileURL: fileURL), reactive: reactive)
+        let item = DispatchWorkItem { [weak self] in
+            self?.finishPreview(restore: true)
+        }
+        previewWorkItem = item
+        DispatchQueue.main.asyncAfter(deadline: .now() + duration, execute: item)
+    }
+
+    /// Ends a preview and returns to the previous state.
+    func cancelPreview() {
+        finishPreview(restore: true)
+    }
+
+    /// Ends a preview without restoring (used when another action already
+    /// takes ownership of the engine).
+    func stopPreview() {
+        finishPreview(restore: false)
+    }
+
+    private func finishPreview(restore: Bool) {
+        guard let temp = previewTempURL else { return }
+        let shouldRestore = restore && previewEngineWasOn && !previewPreviousTheme.isEmpty
+        let previousTheme = previewPreviousTheme
+        previewTempURL = nil
+        previewWorkItem?.cancel()
+        previewWorkItem = nil
+        previewPreviousTheme = ""
+        previewEngineWasOn = false
+        try? FileManager.default.removeItem(at: temp)
+        if shouldRestore {
+            startEngine(for: previousTheme)
+        } else {
+            engine.stop()
+        }
+    }
+
+    /// Forgets a preview without stopping the engine. Used when a new engine
+    /// start has already replaced the previewed theme.
+    private func discardPreviewBookkeeping() {
+        previewWorkItem?.cancel()
+        previewWorkItem = nil
+        if let temp = previewTempURL {
+            try? FileManager.default.removeItem(at: temp)
+        }
+        previewTempURL = nil
+        previewPreviousTheme = ""
+        previewEngineWasOn = false
     }
 
     private func updateOverrideTheme() {
@@ -302,7 +390,16 @@ final class AppState: ObservableObject {
 
     /// Restarts the loop with a fresh profile after the theme file was saved.
     func themeEdited(_ name: String) {
+        stopPreview()
         refreshThemes()
         if engineOn, effectiveTheme == name { startEngine() }
+    }
+
+    /// Re-reads the theme directory after files were added or removed and
+    /// restarts the loop so a deleted theme cannot keep playing from memory.
+    func themeFilesChanged() {
+        stopPreview()
+        refreshThemes()
+        if engineOn { startEngine() }
     }
 }
