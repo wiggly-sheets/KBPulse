@@ -54,8 +54,8 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "4F9B00000000000000000017"
-            BuildableName = "KBPulseApp.app"
-            BlueprintName = "KBPulseApp"
+            BuildableName = "KBPulse.app"
+            BlueprintName = "KBPulse"
             ReferencedContainer = "container:KBPulse.xcodeproj">
          </BuildableReference>
       </MacroExpansion>

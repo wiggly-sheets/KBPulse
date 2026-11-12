@@ -47,10 +47,12 @@ enum CLIInstallResult {
 }
 
 struct CLISymlinkManager {
-    /// Bundled CLI path inside the app bundle: KBPulseApp.app/Contents/MacOS/kbpulse
+    /// Bundled CLI path inside the app bundle. It must not live in
+    /// Contents/MacOS: `KBPulse` and `kbpulse` collide on case-insensitive
+    /// APFS and the CLI would overwrite the app executable.
     static let bundledCLIPath: URL = {
         Bundle.main.bundleURL
-            .appendingPathComponent("Contents/MacOS/kbpulse")
+            .appendingPathComponent("Contents/Helpers/kbpulse")
     }()
 
     /// Where the user-facing symlink lives.
@@ -61,18 +63,31 @@ struct CLISymlinkManager {
 
     static let installPath: URL = installDir.appendingPathComponent("kbpulse")
 
-    /// True when a `kbpulse` command resolves on PATH.
+    /// True when a `kbpulse` command resolves on the user's shell PATH.
+    ///
+    /// A GUI app inherits a minimal PATH (`/usr/bin:/bin:/usr/sbin:/sbin`), so
+    /// `/usr/bin/which` reports false even when the user's shell can find the
+    /// command. Ask the login shell instead, with a short timeout so a slow
+    /// shell profile cannot hang the Settings window.
     static var isOnPATH: Bool {
         let task = Process()
-        task.executableURL = URL(fileURLWithPath: "/usr/bin/which")
-        task.arguments = ["kbpulse"]
+        task.executableURL = URL(fileURLWithPath: "/bin/zsh")
+        task.arguments = ["-lc", "command -v kbpulse"]
         let pipe = Pipe()
         task.standardOutput = pipe
-        task.standardError = Pipe()
+        task.standardError = FileHandle.nullDevice
         do {
             try task.run()
-            task.waitUntilExit()
         } catch {
+            return false
+        }
+
+        let deadline = Date().addingTimeInterval(3)
+        while task.isRunning && Date() < deadline {
+            Thread.sleep(forTimeInterval: 0.05)
+        }
+        if task.isRunning {
+            task.terminate()
             return false
         }
         return task.terminationStatus == 0
@@ -108,19 +123,23 @@ struct CLISymlinkManager {
         }
         do {
             try fm.createDirectory(at: installDir, withIntermediateDirectories: true)
-            if fm.fileExists(atPath: installPath.path) {
-                // Only remove if it is already our symlink (or dangling toward us).
-                if let existingDest = try? fm.destinationOfSymbolicLink(atPath: installPath.path) {
-                    if existingDest == bundledCLIPath.path {
-                        try fm.removeItem(at: installPath)
-                    } else {
-                        // Existing symlink points elsewhere — refuse to overwrite.
-                        return .protectedFile(installPath)
-                    }
+            // Check for a symlink even when it is dangling: `fileExists`
+            // follows the link and returns false for a broken one, which used
+            // to turn a simple upgrade into a generic failure.
+            // Earlier builds placed the CLI in Contents/MacOS, so treat that
+            // path as ours too and upgrade in place.
+            let legacyPath = Bundle.main.bundleURL
+                .appendingPathComponent("Contents/MacOS/kbpulse").path
+            if let existingDest = try? fm.destinationOfSymbolicLink(atPath: installPath.path) {
+                if existingDest == bundledCLIPath.path || existingDest == legacyPath {
+                    try fm.removeItem(at: installPath)
                 } else {
-                    // Not a symlink at all — likely a user file; refuse to overwrite.
+                    // Existing symlink points elsewhere — refuse to overwrite.
                     return .protectedFile(installPath)
                 }
+            } else if fm.fileExists(atPath: installPath.path) {
+                // Not a symlink at all — likely a user file; refuse to overwrite.
+                return .protectedFile(installPath)
             }
             try fm.createSymbolicLink(at: installPath, withDestinationURL: bundledCLIPath)
             return .installed(installPath)

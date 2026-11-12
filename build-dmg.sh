@@ -1,83 +1,92 @@
 #!/bin/bash
-# build-dmg.sh - Build KBPulse app and create DMG
-# Usage: ./build-dmg.sh [release|debug|both]
+# build-dmg.sh - Build the KBPulse app (with the embedded kbpulse CLI) and
+# package it as a DMG.
+# Usage: ./build-dmg.sh [release|debug]
 
-set -e
+set -euo pipefail
 
-BUILD_TYPE="${1:-release}"
+BUILD_TYPE="$(printf '%s' "${1:-release}" | tr '[:upper:]' '[:lower:]')"
+case "$BUILD_TYPE" in
+	release) CONFIGURATION="Release" ;;
+	debug) CONFIGURATION="Debug" ;;
+	*)
+		echo "Usage: ./build-dmg.sh [release|debug]" >&2
+		exit 1
+		;;
+esac
+
 PROJECT_ROOT="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_FILE="$PROJECT_ROOT/KBPulse.xcodeproj"
-APP_NAME="KBPulseApp"
+DERIVED_DATA="$PROJECT_ROOT/build/DerivedData"
+APP_NAME="KBPulse"
+PRODUCTS_DIR="$DERIVED_DATA/Build/Products/$CONFIGURATION"
 APP_BUNDLE="$PROJECT_ROOT/build/$APP_NAME.app"
-DMG_NAME="$APP_NAME.dmg"
-DMG_PATH="$PROJECT_ROOT/build/$DMG_NAME"
+DMG_PATH="$PROJECT_ROOT/build/$APP_NAME.dmg"
 
 echo "=== KBPulse Build Script ==="
-echo "Building $APP_NAME in $BUILD_TYPE mode..."
+echo "Building $APP_NAME ($CONFIGURATION)…"
 
-buildScheme() {
-	local scheme="$1"
-	echo "Building scheme: $scheme"
-	xcodebuild -project "$PROJECT_FILE" \
-		-scheme "$scheme" \
-		-configuration "$BUILD_TYPE" \
-		-derivedDataPath "$PROJECT_ROOT/build/DerivedData" \
-		CODE_SIGNING_ALLOWED=NO \
-		PRODUCT_BUNDLE_IDENTIFIER="com.ethanrdoesmc.kbpulseapp" \
-		build 2>&1 | grep -E "(^error|BUILD (SUCCES|FAIL))" || true
-}
-
-# Build the app
-buildScheme "$APP_NAME"
-
-if [ ! -d "$APP_BUNDLE" ] && [ "$BUILD_TYPE" != "both" ]; then
-	# Copy app bundle to build dir with .app extension
-	ACTUAL_APP=$(find "$PROJECT_ROOT/build/DerivedData" -name "KBPulseApp.app" -type d 2>/dev/null | head -1)
-	if [ -n "$ACTUAL_APP" ]; then
-		mkdir -p "$(dirname "$APP_BUNDLE")"
-		cp -R "$ACTUAL_APP" "$APP_BUNDLE"
-		echo "App bundle copied to $APP_BUNDLE"
-	else
-		echo "Error: Could not find built app bundle"
-		exit 1
-	fi
-fi
-
-# Create DMG
-echo "Creating DMG..."
-
-# Create temporary DMG build directory
-DMG_TEMP="$PROJECT_ROOT/build/dmg_temp"
-rm -rf "$DMG_TEMP"
-mkdir -p "$DMG_TEMP"
-
-# Copy app to temp dir
-ACTUAL_APP=$(find "$PROJECT_ROOT/build/DerivedData" -name "KBPulseApp.app" -type d 2>/dev/null | head -1)
-if [ -n "$ACTUAL_APP" ]; then
-	cp -R "$ACTUAL_APP" "$DMG_TEMP/"
+# Pick whichever shared scheme builds the app. The project has been renamed
+# more than once, so accept both capitalisations instead of hard-coding one.
+SCHEMES=$(xcodebuild -list -project "$PROJECT_FILE" 2>/dev/null \
+	| sed -n '/Schemes:/,$p' | tail -n +2 | sed 's/^[[:space:]]*//')
+if printf '%s\n' "$SCHEMES" | grep -qx "KBPulse"; then
+	SCHEME="KBPulse"
+elif printf '%s\n' "$SCHEMES" | grep -qx "kbpulse"; then
+	SCHEME="kbpulse"
 else
-	echo "Error: No app bundle found"
+	echo "Error: no KBPulse app scheme found in the project." >&2
 	exit 1
 fi
 
-# Create DMG using hdiutil
+# The app target depends on the CLI target and embeds the resulting binary in
+# Contents/Helpers. Let xcodebuild's exit status decide success.
+xcodebuild -project "$PROJECT_FILE" \
+	-scheme "$SCHEME" \
+	-configuration "$CONFIGURATION" \
+	-derivedDataPath "$DERIVED_DATA" \
+	CODE_SIGNING_ALLOWED=NO \
+	build
+
+ACTUAL_APP="$PRODUCTS_DIR/$APP_NAME.app"
+if [ ! -d "$ACTUAL_APP" ]; then
+	echo "Error: built app bundle not found at $ACTUAL_APP" >&2
+	exit 1
+fi
+if [ ! -x "$ACTUAL_APP/Contents/Helpers/kbpulse" ]; then
+	echo "Error: kbpulse CLI was not embedded in the app bundle." >&2
+	exit 1
+fi
+
+rm -rf "$APP_BUNDLE"
+mkdir -p "$(dirname "$APP_BUNDLE")"
+cp -R "$ACTUAL_APP" "$APP_BUNDLE"
+echo "App bundle: $APP_BUNDLE"
+
+# Create the DMG from a staging folder containing the app and the usual
+# drag-to-Applications shortcut.
+DMG_TEMP="$PROJECT_ROOT/build/dmg_temp"
+rm -rf "$DMG_TEMP"
+mkdir -p "$DMG_TEMP"
+cp -R "$ACTUAL_APP" "$DMG_TEMP/"
+ln -s /Applications "$DMG_TEMP/Applications"
+
+echo "Creating DMG…"
+rm -f "$DMG_PATH"
 hdiutil create -volname "$APP_NAME" \
 	-srcfolder "$DMG_TEMP" \
 	-ov -format UDZO \
-	"$DMG_PATH" 2>&1 | tail -5
+	"$DMG_PATH"
 
-# Clean up temp
 rm -rf "$DMG_TEMP"
 
 echo "DMG created at $DMG_PATH"
-if [ -f "$DMG_PATH" ]; then
-	echo "Size: $(du -h "$DMG_PATH" | cut -f1)"
-fi
+echo "Size: $(du -h "$DMG_PATH" | cut -f1)"
 
-# Optional: Verify the app
-echo "Verifying app bundle..."
-if [ -d "$APP_BUNDLE" ]; then
-	codesign --verify --deep "$APP_BUNDLE" 2>/dev/null && echo "Code signature valid" || echo "No code signature (expected for ad-hoc build)"
+if codesign --verify --deep "$APP_BUNDLE" 2>/dev/null; then
+	echo "Code signature valid"
+else
+	echo "No code signature (expected for an unsigned build)"
 fi
 
 echo "Build complete!"

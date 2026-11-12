@@ -24,5 +24,11 @@
 	<string>$(CURRENT_PROJECT_VERSION)</string>
 	<key>LSMinimumSystemVersion</key>
 	<string>$(MACOSX_DEPLOYMENT_TARGET)</string>
+	<key>LSMultipleInstancesProhibited</key>
+	<true/>
+	<key>NSDocumentsFolderUsageDescription</key>
+	<string>KBPulse stores and reads theme files in ~/Documents/KBPulse.</string>
+	<key>NSDownloadsFolderUsageDescription</key>
+	<string>KBPulse watches the Downloads folder so File Download hooks can fire when a download finishes.</string>
 </dict>
 </plist>

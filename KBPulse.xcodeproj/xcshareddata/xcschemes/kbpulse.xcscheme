@@ -15,8 +15,23 @@
             buildForAnalyzing = "YES">
             <BuildableReference
                BuildableIdentifier = "primary"
-               BlueprintIdentifier = "4FF354AA27209F3D00F7F65E"
-               BuildableName = "kbpulse"
+               BlueprintIdentifier = "4F9B00000000000000000017"
+               BuildableName = "KBPulse.app"
+               BlueprintName = "KBPulse"
+               ReferencedContainer = "container:KBPulse.xcodeproj">
+            </BuildableReference>
+         </BuildActionEntry>
+         <BuildActionEntry
+            buildForTesting = "YES"
+            buildForRunning = "NO"
+            buildForProfiling = "NO"
+            buildForArchiving = "NO"
+            buildForAnalyzing = "YES">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "4F9B0000000000000000002F"
+               BuildableName = "KBPulseAppTests.xctest"
+               BlueprintName = "KBPulseAppTests"
                ReferencedContainer = "container:KBPulse.xcodeproj">
             </BuildableReference>
          </BuildActionEntry>
@@ -28,6 +43,18 @@
       selectedLauncherIdentifier = "Xcode.DebuggerFoundation.Launcher.LLDB"
       shouldUseLaunchSchemeArgsEnv = "YES"
       shouldAutocreateTestPlan = "YES">
+      <Testables>
+         <TestableReference
+            skipped = "NO">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "4F9B0000000000000000002F"
+               BuildableName = "KBPulseAppTests.xctest"
+               BlueprintName = "KBPulseAppTests"
+               ReferencedContainer = "container:KBPulse.xcodeproj">
+            </BuildableReference>
+         </TestableReference>
+      </Testables>
    </TestAction>
    <LaunchAction
       buildConfiguration = "Debug"
@@ -45,8 +72,9 @@
          runnableDebuggingMode = "0">
          <BuildableReference
             BuildableIdentifier = "primary"
-            BlueprintIdentifier = "4FF354AA27209F3D00F7F65E"
-            BuildableName = "kbpulse"
+            BlueprintIdentifier = "4F9B00000000000000000017"
+            BuildableName = "KBPulse.app"
+            BlueprintName = "KBPulse"
             ReferencedContainer = "container:KBPulse.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
@@ -61,8 +89,9 @@
          runnableDebuggingMode = "0">
          <BuildableReference
             BuildableIdentifier = "primary"
-            BlueprintIdentifier = "4FF354AA27209F3D00F7F65E"
-            BuildableName = "kbpulse"
+            BlueprintIdentifier = "4F9B00000000000000000017"
+            BuildableName = "KBPulse.app"
+            BlueprintName = "KBPulse"
             ReferencedContainer = "container:KBPulse.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
