@@ -1,16 +1,22 @@
 #!/bin/bash
-# build-dmg.sh - Build the KBPulse app (with the embedded kbpulse CLI) and
-# package it as a DMG.
-# Usage: ./build-dmg.sh [release|debug]
+# build-dmg.sh - Build the KBPulse app (with the embedded kbpulse CLI) and,
+# unless asked for the app alone, package it as a DMG.
+# Usage: ./build-dmg.sh [app|dmg] [release|debug]
 
 set -euo pipefail
+
+MODE="dmg"
+if [[ "${1:-}" == "app" || "${1:-}" == "dmg" ]]; then
+	MODE="$1"
+	shift
+fi
 
 BUILD_TYPE="$(printf '%s' "${1:-release}" | tr '[:upper:]' '[:lower:]')"
 case "$BUILD_TYPE" in
 	release) CONFIGURATION="Release" ;;
 	debug) CONFIGURATION="Debug" ;;
 	*)
-		echo "Usage: ./build-dmg.sh [release|debug]" >&2
+		echo "Usage: ./build-dmg.sh [app|dmg] [release|debug]" >&2
 		exit 1
 		;;
 esac
@@ -39,6 +45,16 @@ else
 	exit 1
 fi
 
+# The Makefile stamps a release version through these two variables. A local
+# build without them keeps MARKETING_VERSION from the Xcode project.
+VERSION_FLAGS=""
+if [ -n "${MARKETING_VERSION:-}" ]; then
+	VERSION_FLAGS="$VERSION_FLAGS MARKETING_VERSION=$MARKETING_VERSION"
+fi
+if [ -n "${CURRENT_PROJECT_VERSION:-}" ]; then
+	VERSION_FLAGS="$VERSION_FLAGS CURRENT_PROJECT_VERSION=$CURRENT_PROJECT_VERSION"
+fi
+
 # The app target depends on the CLI target and embeds the resulting binary in
 # Contents/Helpers. Let xcodebuild's exit status decide success.
 xcodebuild -project "$PROJECT_FILE" \
@@ -46,6 +62,7 @@ xcodebuild -project "$PROJECT_FILE" \
 	-configuration "$CONFIGURATION" \
 	-derivedDataPath "$DERIVED_DATA" \
 	CODE_SIGNING_ALLOWED=NO \
+	$VERSION_FLAGS \
 	build
 
 ACTUAL_APP="$PRODUCTS_DIR/$APP_NAME.app"
@@ -62,6 +79,17 @@ rm -rf "$APP_BUNDLE"
 mkdir -p "$(dirname "$APP_BUNDLE")"
 cp -R "$ACTUAL_APP" "$APP_BUNDLE"
 echo "App bundle: $APP_BUNDLE"
+
+# Ad-hoc sign the bundle, including the embedded CLI helper, so the copy in
+# ~/Applications is a valid target for the system.
+codesign --force --deep --sign - "$APP_BUNDLE"
+codesign --verify --deep --strict "$APP_BUNDLE"
+echo "Signed ad-hoc: $APP_BUNDLE"
+
+if [ "$MODE" = "app" ]; then
+	echo "Build complete!"
+	exit 0
+fi
 
 # Create the DMG from a staging folder containing the app and the usual
 # drag-to-Applications shortcut.

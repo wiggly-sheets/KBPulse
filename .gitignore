@@ -69,3 +69,6 @@ iOSInjectionProject/
 .build/
 build-dv/
 default.profraw
+
+# Release artifacts
+release/
