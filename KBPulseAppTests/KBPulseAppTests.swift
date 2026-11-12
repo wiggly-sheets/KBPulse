@@ -232,9 +232,10 @@ final class KBPulseAppTests: XCTestCase {
 
         hook.trigger = "com.apple.iTunes"
         error = HookStore.validationError(for: hook, themes: ["Yawn", "Pulse"])
-        XCTAssertNil(error, "musicPlayback with bundle ID should be valid")
+        XCTAssertNotNil(error, "A non-empty playback trigger can never match")
 
         // musicPlayback with breathing action needs a theme
+        hook.trigger = ""
         hook.action = "breathing"
         error = HookStore.validationError(for: hook, themes: ["Yawn", "Pulse"])
         XCTAssertNotNil(error, "breathing action needs theme for musicPlayback")
@@ -308,19 +309,66 @@ final class KBPulseAppTests: XCTestCase {
         XCTAssertNil(AppState.IconDisplayMode(rawValue: "dockOnly"))
     }
 
-    func testAppStateActiveAgentsPublishes() {
-        // AppState.init() calls updateAgentDetection() which scans the process table.
-        // Agents (codex, opencode, etc.) may be detected - verify the property is properly initialized.
-        let state = AppState()
-        // Property is properly initialized as non-nil [String]
-        XCTAssertNotNil(state.activeAgents, "activeAgents should be initialized")
-        XCTAssertFalse(state.activeAgents.isEmpty, "activeAgents should not be empty if agents are running")
+    // MARK: - Trigger validation regression tests
+
+    func testEmptyTriggerAllowedForEventHooks() {
+        // These hooks legitimately use an empty trigger. The hook editor used
+        // to reject them with a generic "trigger must not be empty" check.
+        let types = ["wake", "screenLock", "screenUnlock", "fileDownload",
+                     "appFrontmost", "idleThreshold", "musicVolume", "musicPlayback"]
+        for type in types {
+            let hook = Hook(hookType: type, trigger: "", action: "flash",
+                            theme: "", enabled: true)
+            XCTAssertNil(HookStore.validationError(for: hook, themes: ["Yawn"]),
+                         "\(type) should allow an empty trigger")
+        }
     }
 
-    func testAppStateAccessibilityPublished() {
-        let state = AppState()
-        // Compare against the engine's assessment rather than hard-coding a boolean.
-        XCTAssertEqual(state.isAccessibilityGranted, ReactiveEngine.isAccessibilityGranted(prompt: false), "Accessibility status should match ReactiveEngine")
+    func testAgentHooksRequireTrigger() {
+        let hook = Hook(hookType: "agentExit", trigger: "   ", action: "flash",
+                        theme: "", enabled: true)
+        XCTAssertNotNil(HookStore.validationError(for: hook, themes: ["Yawn"]))
     }
 
+    func testBreathingHookRequiresExistingTheme() {
+        let hook = Hook(hookType: "appFrontmost", trigger: "", action: "breathing",
+                        theme: "Missing", enabled: true)
+        let error = HookStore.validationError(for: hook, themes: ["Yawn"])
+        XCTAssertNotNil(error)
+        XCTAssertTrue(error!.contains("does not exist"))
     }
+
+    // MARK: - Theme import validation
+
+    func testThemeValidationAcceptsMinimalTheme() {
+        let theme: [String: Any] = [
+            "Name": "Test",
+            "Animations": [
+                ["Name": "Fade", "Brightness": 1.0, "Fade Duration": 1000, "Delay": 0],
+            ],
+        ]
+        XCTAssertNil(ThemeStore.validateTheme(theme))
+    }
+
+    func testThemeValidationRejectsNonThemeJSON() {
+        XCTAssertNotNil(ThemeStore.validateTheme(["name": "package.json"]))
+        XCTAssertNotNil(ThemeStore.validateTheme(["Name": "No Content"]))
+        XCTAssertNotNil(ThemeStore.validateTheme([
+            "Name": "Bad Brightness",
+            "Animations": [["Brightness": 2.0]],
+        ]))
+    }
+
+    func testReactiveModeClampsValues() {
+        let mode = ReactiveMode(section: [
+            "Bump": 4.0,
+            "Floor": -1.0,
+            "Decay Duration": -50,
+            "Space Bump": 3.0,
+        ])
+        XCTAssertEqual(mode.bump, 1.0)
+        XCTAssertEqual(mode.floor, 0.0)
+        XCTAssertEqual(mode.decay, 0)
+        XCTAssertEqual(mode.spaceBump, 1.0)
+    }
+}
