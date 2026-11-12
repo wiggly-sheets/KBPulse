@@ -34,6 +34,10 @@
 //                                  trigger threshold (seconds).
 //              "musicVolume"     — system output volume crossed the trigger
 //                                  threshold (0-100%). Empty trigger disables.
+//              "musicPlayback"   — play/pause or track change was observed.
+//                                  The public MediaPlayer API does not expose
+//                                  the source app, so the trigger must stay
+//                                  empty (any player).
 //    trigger  — matcher for the event.
 //              Agents: executable basename, exact case-insensitive match.
 //              Apps:  bundle identifier or localised name, substring
@@ -250,9 +254,11 @@ enum HookStore {
             }
         }
         if hook.hookType == "musicPlayback" {
-            // Trigger is optional bundle ID for filtering (empty = any media app)
-            let trigger = hook.trigger.trimmingCharacters(in: .whitespaces)
-            // No validation needed - empty or bundle ID are both valid
+            // The public MediaPlayer API does not expose the source app, so a
+            // non-empty trigger would silently never fire.
+            if !hook.trigger.trimmingCharacters(in: .whitespaces).isEmpty {
+                return "Playback hooks cannot filter by app; leave the trigger empty."
+            }
         }
         if hook.action == "breathing" {
             guard !hook.theme.isEmpty else {
@@ -266,14 +272,6 @@ enum HookStore {
             return "Cooldown must be a finite number of seconds, zero or more."
         }
         return nil
-    }
-
-    /// Public validator for a trigger/action pair.
-    static func validate(trigger: String, action: String) -> Bool {
-        // Validation of type is deferred to the caller's context (e.g. SettingsView)
-        // because type is part of the hook definition, not just trigger/action.
-        // This is a minimal helper for field validation.
-        !trigger.isEmpty && !action.isEmpty
     }
 
     /// All enabled hooks, or [] when the file is missing/invalid.

@@ -42,7 +42,6 @@ private func mergedDiagnostics(for hook: Hook) -> HookDiagnostics? {
 
 struct SettingsView: View {
     @ObservedObject var state: AppState
-    @State private var showRestartWarning = false
 
     var body: some View {
         TabView {
@@ -66,6 +65,16 @@ struct SettingsView: View {
             Picker("Theme", selection: state.themeBinding) {
                 ForEach(state.themes, id: \.self) { Text($0).tag($0) }
             }
+            Toggle("Launch at login", isOn: Binding(
+                get: { state.isLoginItemEnabled },
+                set: { state.setLoginItem($0) }
+            ))
+            if let error = state.loginItemError {
+                Text(error)
+                    .font(.footnote)
+                    .foregroundStyle(.orange)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
             CLIView(state: state)
             Section("Display") {
                 Picker("Icon display", selection: $state.iconDisplayMode) {
@@ -74,15 +83,12 @@ struct SettingsView: View {
                     }
                 }
                 .pickerStyle(.menu)
-                .onChange(of: state.iconDisplayMode) { _ in
-                    showRestartWarning = true
-                }
-                Text("Choose how to display icons: dock, menu bar, both, or neither.")
+                Text("Choose how KBPulse appears. Changes take effect immediately.")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
-                if showRestartWarning {
-                    Text("Changing Icon Display Mode requires an app restart.")
+                if state.iconDisplayMode == .none {
+                    Text("“Neither” hides both icons. Relaunch KBPulse to reach Settings again.")
                         .font(.footnote)
                         .foregroundStyle(.orange)
                         .fixedSize(horizontal: false, vertical: true)
@@ -121,14 +127,14 @@ struct SettingsView: View {
                                 }
                             }
                         }
-                    } else if state.activeAgents.isEmpty {
+                    } else if state.agentScanAvailable {
                         Image(systemName: "ellipsis.circle")
                             .foregroundStyle(.secondary)
                             .help("No agents detected")
                     } else {
                         Image(systemName: "questionmark.circle")
                             .foregroundStyle(.secondary)
-                            .help("Scan unavailable")
+                            .help("Process scan unavailable")
                     }
                 }
             }
@@ -173,15 +179,19 @@ private struct CLIView: View {
                     .kbGlassButtonStyle()
                 }
             }
-            if state.cliInstalledPath == nil || true {
-                Button(state.cliInstalledPath == nil ? "Install kbpulse to ~/.local/bin" : "Reinstall") {
-                    let result = CLISymlinkManager.installWithStatus()
-                    cliInstallMessage = result.message
-                    if result.isSuccess {
-                        state.refreshCLIStatus()
-                    }
+            Button(state.cliInstalledPath == nil ? "Install kbpulse to ~/.local/bin" : "Reinstall") {
+                let result = CLISymlinkManager.installWithStatus()
+                cliInstallMessage = result.message
+                if result.isSuccess {
+                    state.refreshCLIStatus()
                 }
-                .kbGlassButtonStyle(prominent: true)
+            }
+            .kbGlassButtonStyle(prominent: true)
+            if state.cliInstalledPath != nil && !state.cliOnPATH {
+                Text("To call `kbpulse` from a shell, add ~/.local/bin to PATH in your shell profile.")
+                    .font(.footnote)
+                    .foregroundStyle(.orange)
+                    .fixedSize(horizontal: false, vertical: true)
             }
             Text("The CLI runs the same engine as the app. Use it for scripts, launchers, keyboard shortcuts.")
                 .font(.footnote)
@@ -329,14 +339,32 @@ private struct HooksTab: View {
 
     private func handleDrop(from providers: [NSItemProvider], toIndex: Int) -> Bool {
         guard let provider = providers.first else { return false }
-        let item = provider.loadItem(forTypeIdentifier: UTType.text.identifier, options: nil)
-        guard let data = item as? Data,
-              let itemStr = String(data: data, encoding: .utf8),
-              let fromIndex = Int(itemStr),
-              fromIndex != toIndex,
-              fromIndex >= 0,
-              fromIndex < hooks.count else { return false }
+        // `loadItem` is asynchronous in practice; the synchronous return is
+        // often nil. Load the payload in a completion handler and move the
+        // row on the main thread once it arrives. NSString providers may hand
+        // back a String or Data, so accept both.
+        provider.loadItem(forTypeIdentifier: UTType.text.identifier, options: nil) { item, _ in
+            let text: String?
+            switch item {
+            case let string as String:
+                text = string
+            case let data as Data:
+                text = String(data: data, encoding: .utf8)
+            default:
+                text = nil
+            }
+            guard let text, let fromIndex = Int(text) else { return }
+            DispatchQueue.main.async {
+                moveHook(from: fromIndex, to: toIndex)
+            }
+        }
+        return true
+    }
 
+    private func moveHook(from fromIndex: Int, to toIndex: Int) {
+        guard fromIndex != toIndex,
+              hooks.indices.contains(fromIndex),
+              hooks.indices.contains(toIndex) else { return }
         var updated = hooks
         let hook = updated.remove(at: fromIndex)
         let at = toIndex > fromIndex ? toIndex - 1 : toIndex
@@ -344,7 +372,6 @@ private struct HooksTab: View {
         if let msg = persist(updated) {
             error = msg
         }
-        return true
     }
 
     // MARK: - Rows
@@ -571,7 +598,7 @@ private struct HookEditor: View {
             Picker("Hook type", selection: $draft.hookType) {
                 ForEach(HookStore.hookTypes, id: \.self) { Text($0).tag($0) }
             }
-            .onChange(of: draft.hookType) { _ in
+            .onChange(of: draft.hookType) { _, _ in
                 let allowed = HookStore.allowedActions(for: draft.hookType)
                 if !allowed.contains(draft.action) {
                     draft.action = allowed.first ?? draft.action
@@ -586,7 +613,13 @@ private struct HookEditor: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
             if draft.hookType == "musicPlayback" {
-                Text("Optional bundle ID to filter by media app (e.g., com.apple.Music). Empty = any media app.")
+                Text("macOS does not expose the source media app, so leave the trigger empty to match any player.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            if draft.hookType == "appLaunched" || draft.hookType == "appTerminated" {
+                Text("Bundle ID or app name, substring match. Empty = any app.")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -653,10 +686,9 @@ private struct HookEditor: View {
                         .kbGlassButtonStyle()
                     Button("Save") {
                         guard !saved else { return }
-                        if !HookStore.validate(trigger: draft.trigger, action: draft.action) {
-                            error = "Trigger and action must not be empty."
-                            return
-                        }
+                        // Trigger rules are type-specific: wake, screen lock,
+                        // file download and several others legitimately use an
+                        // empty trigger. `onSave` runs the full validator.
                         if let message = onSave(draft) {
                             error = message
                         } else {

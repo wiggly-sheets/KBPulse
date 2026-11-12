@@ -20,8 +20,10 @@ struct KBPulseApp: App {
     @StateObject private var state = AppState()
 
     var body: some Scene {
-        // Always have a window group (hidden when not needed) so app stays alive
-        WindowGroup("KBPulse Settings") {
+        // A single settings window. `openWindow(id:)` from the menu bar
+        // requires a stable scene id; the previous `openSettings` environment
+        // only works with a `Settings` scene.
+        Window("KBPulse Settings", id: "settings") {
             SettingsView(state: state)
                 .hiddenTitlebar()
                 .frame(minWidth: 520, minHeight: 380)
@@ -58,7 +60,7 @@ extension View {
 
 struct MenuContent: View {
     @ObservedObject var state: AppState
-    @Environment(\.openSettings) var openSettings
+    @Environment(\.openWindow) private var openWindow
 
     var body: some View {
         Toggle("Animation engine", isOn: state.engineBinding)
@@ -72,7 +74,8 @@ struct MenuContent: View {
         ))
         Divider()
         Button("Settings…") {
-            openSettings()
+            openWindow(id: "settings")
+            NSApp.activate(ignoringOtherApps: true)
         }
         Button("Quit KBPulse") {
             NSApp.terminate(nil)
