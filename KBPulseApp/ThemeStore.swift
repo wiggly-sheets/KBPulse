@@ -29,20 +29,26 @@ struct ReactiveMode {
         self.init(section: section)
     }
 
-    /// Parses a section for editing; missing fields keep defaults.
+    /// Parses a section for editing; missing fields keep defaults. Values are
+    /// clamped so a hand-edited file cannot drive the backlight out of range.
     init(section: [String: Any] = [:]) {
         if let v = section["Enabled"] as? Bool { enabled = v }
-        if let v = section["Bump"] as? Double { bump = v }
-        if let v = section["Decay Duration"] as? Int { decay = v }
-        if let v = section["Floor"] as? Double { floor = v }
-        if let v = section["Space Bump"] as? Double { spaceBump = v }
-        if let v = section["Enter Bump"] as? Double { enterBump = v }
-        if let v = section["Modifier Bump"] as? Double { modifierBump = v }
+        if let v = section["Bump"] as? Double { bump = min(max(v, 0), 1) }
+        if let v = section["Decay Duration"] as? Int { decay = max(v, 0) }
+        if let v = section["Floor"] as? Double { floor = min(max(v, 0), 1) }
+        if let v = section["Space Bump"] as? Double { spaceBump = min(max(v, 0), 1) }
+        if let v = section["Enter Bump"] as? Double { enterBump = min(max(v, 0), 1) }
+        if let v = section["Modifier Bump"] as? Double { modifierBump = min(max(v, 0), 1) }
     }
 
     func dictionary() -> [String: Any] {
-        ["Enabled": enabled, "Bump": bump, "Decay Duration": decay, "Floor": floor,
-         "Space Bump": spaceBump, "Enter Bump": enterBump, "Modifier Bump": modifierBump]
+        ["Enabled": enabled,
+         "Bump": min(max(bump, 0), 1),
+         "Decay Duration": max(decay, 0),
+         "Floor": min(max(floor, 0), 1),
+         "Space Bump": min(max(spaceBump, 0), 1),
+         "Enter Bump": min(max(enterBump, 0), 1),
+         "Modifier Bump": min(max(modifierBump, 0), 1)]
     }
 }
 
@@ -56,6 +62,40 @@ enum ThemeStore {
                           userInfo: [NSLocalizedDescriptionKey: "\(url.lastPathComponent) is not a JSON object."])
         }
         return dict
+    }
+
+    /// Basic schema check for imported files. Returns a user-facing problem,
+    /// or nil when the dictionary can be loaded as a theme.
+    static func validateTheme(_ dict: [String: Any]) -> String? {
+        guard let name = dict["Name"] as? String,
+              !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            return "it has no non-empty \"Name\"."
+        }
+        let animations = dict["Animations"] as? [[String: Any]]
+        let reactive = dict["Reactive"] as? [String: Any]
+        if animations == nil && reactive == nil {
+            return "it has neither an \"Animations\" array nor a \"Reactive\" section."
+        }
+        let reactiveEnabled = (reactive?["Enabled"] as? Bool) ?? (reactive != nil)
+        if (animations?.isEmpty ?? true) && !reactiveEnabled {
+            return "it has no animations and typing reactions are not enabled."
+        }
+        for (index, animation) in (animations ?? []).enumerated() {
+            guard let brightness = animation["Brightness"] as? NSNumber else {
+                return "animation \(index + 1) has no numeric \"Brightness\"."
+            }
+            let value = brightness.doubleValue
+            guard value >= 0, value <= 1 else {
+                return "animation \(index + 1) brightness must be between 0 and 1."
+            }
+            if let fade = animation["Fade Duration"] as? NSNumber, fade.doubleValue < 0 {
+                return "animation \(index + 1) has a negative fade duration."
+            }
+            if let delay = animation["Delay"] as? NSNumber, delay.doubleValue < 0 {
+                return "animation \(index + 1) has a negative delay."
+            }
+        }
+        return nil
     }
 
     /// Validates and writes atomically. Assumes caller holds the in-memory

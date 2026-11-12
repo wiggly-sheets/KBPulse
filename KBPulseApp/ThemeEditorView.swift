@@ -73,7 +73,9 @@ final class ThemeDoc: ObservableObject {
         reactive = ReactiveMode()
     }
 
-    func save(to url: URL) throws {
+    /// The full JSON for the current editor state, merging edits over the
+    /// original file so unknown keys survive. Also used for previews.
+    func dictionary() -> [String: Any] {
         var dict = raw
         dict["Name"] = name
         dict["Description"] = comment
@@ -92,15 +94,25 @@ final class ThemeDoc: ObservableObject {
         } else {
             dict.removeValue(forKey: "Reactive")
         }
-        try ThemeStore.write(dict, to: url)
+        return dict
     }
-    
+
+    func save(to url: URL) throws {
+        try ThemeStore.write(dictionary(), to: url)
+    }
+
     func validate() -> String? {
         if name.trimmingCharacters(in: .whitespaces).isEmpty {
             return "Theme name is required"
         }
-        if animations.isEmpty && !hasReactive {
-            return "At least one animation or reactive mode is required"
+        if animations.isEmpty && !(hasReactive && reactive.enabled) {
+            return "Add at least one animation, or enable typing reactions."
+        }
+        for (label, value) in [("Homepage", homepage), ("Preview Image URL", previewImageURL)] {
+            let trimmed = value.trimmingCharacters(in: .whitespaces)
+            if !trimmed.isEmpty, URL(string: trimmed)?.scheme == nil {
+                return "\(label) must be a valid URL, or empty."
+            }
         }
         for (i, anim) in animations.enumerated() {
             if anim.name.trimmingCharacters(in: .whitespaces).isEmpty {
@@ -117,14 +129,18 @@ final class ThemeDoc: ObservableObject {
             }
         }
         if hasReactive {
-            if reactive.bump < 0 || reactive.bump > 1 {
-                return "Reactive bump must be 0-1"
+            let unitValues: [(String, Double)] = [
+                ("Bump", reactive.bump),
+                ("Floor", reactive.floor),
+                ("Space bump", reactive.spaceBump),
+                ("Enter bump", reactive.enterBump),
+                ("Modifier bump", reactive.modifierBump),
+            ]
+            for (label, value) in unitValues where value < 0 || value > 1 {
+                return "Reactive \(label.lowercased()) must be 0-1."
             }
             if reactive.decay < 0 {
-                return "Reactive decay must be ≥ 0"
-            }
-            if reactive.floor < 0 || reactive.floor > 1 {
-                return "Reactive floor must be 0-1"
+                return "Reactive decay must be ≥ 0."
             }
         }
         return nil
@@ -135,14 +151,15 @@ struct ThemesTab: View {
     @ObservedObject var state: AppState
     @StateObject private var doc = ThemeDoc()
     @State private var selected = ""
+    @State private var loadedSelection = ""
     @State private var newName = ""
+    @State private var showNew = false
     @State private var showDuplicate = false
+    @State private var showDelete = false
     @State private var message: String?
-    @State private var permissionGranted = ReactiveEngine.isAccessibilityGranted(prompt: false)
     @State private var showBrightnessCurve = false
     @State private var isDirty = false
-    @State private var previousEffectiveTheme: String?
-    @State private var previousReactiveMode: ReactiveMode?
+    @State private var isLoadingDoc = false
     @State private var showDiscardAlert = false
     @State private var pendingSelection = ""
 
@@ -153,8 +170,11 @@ struct ThemesTab: View {
                     ForEach(state.themes, id: \.self) { Text($0).tag($0) }
                 }
                 HStack {
-                    TextField("Name for the copy", text: $newName)
+                    TextField("New theme name", text: $newName)
                         .lineLimit(nil)
+                    Button("New…") { showNew = true }
+                        .disabled(newName.trimmingCharacters(in: .whitespaces).isEmpty)
+                        .kbGlassButtonStyle()
                     Button("Duplicate") { showDuplicate = true }
                         .disabled(selected.isEmpty || newName.trimmingCharacters(in: .whitespaces).isEmpty)
                         .kbGlassButtonStyle()
@@ -163,6 +183,9 @@ struct ThemesTab: View {
                     Button("Import…") { importPanel() }
                         .kbGlassButtonStyle()
                     Button("Export…") { exportPanel() }.disabled(selected.isEmpty)
+                        .kbGlassButtonStyle()
+                    Button("Delete…") { showDelete = true }
+                        .disabled(selected.isEmpty)
                         .kbGlassButtonStyle()
                     Spacer()
                     Button("Save") { save() }.disabled(selected.isEmpty)
@@ -174,6 +197,14 @@ struct ThemesTab: View {
                     .lineLimit(nil)
                 TextField("Description", text: $doc.comment)
                     .lineLimit(nil)
+                TextField("Author", text: $doc.author)
+                    .lineLimit(nil)
+                TextField("Version", text: $doc.version)
+                    .lineLimit(nil)
+                TextField("Homepage", text: $doc.homepage)
+                    .lineLimit(nil)
+                TextField("Preview Image URL", text: $doc.previewImageURL)
+                    .lineLimit(nil)
             }
             Section("Animations") {
                 if doc.animations.isEmpty {
@@ -181,14 +212,42 @@ struct ThemesTab: View {
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
-                ForEach($doc.animations) { $anim in
+                ForEach(Array(doc.animations.enumerated()), id: \.element.id) { index, _ in
                     VStack(alignment: .leading, spacing: 8) {
-                        TextField("Animation name", text: $anim.name)
-                            .font(.headline)
+                        HStack {
+                            TextField("Animation name", text: $doc.animations[index].name)
+                                .font(.headline)
+                                .lineLimit(nil)
+                            Spacer()
+                            Button {
+                                moveAnimation(index, by: -1)
+                            } label: {
+                                Image(systemName: "arrow.up")
+                            }
+                            .buttonStyle(.borderless)
+                            .disabled(index == 0)
+                            .help("Move animation up")
+                            Button {
+                                moveAnimation(index, by: 1)
+                            } label: {
+                                Image(systemName: "arrow.down")
+                            }
+                            .buttonStyle(.borderless)
+                            .disabled(index == doc.animations.count - 1)
+                            .help("Move animation down")
+                            Button(role: .destructive) {
+                                doc.animations.remove(at: index)
+                            } label: {
+                                Image(systemName: "trash")
+                            }
+                            .buttonStyle(.borderless)
+                            .help("Delete animation")
+                        }
+                        TextField("Description", text: $doc.animations[index].comment)
                             .lineLimit(nil)
-                        doubleField("Brightness (0-1)", $anim.brightness)
-                        intField("Fade Duration (ms)", $anim.fade)
-                        intField("Delay (ms)", $anim.delay)
+                        doubleField("Brightness (0-1)", $doc.animations[index].brightness)
+                        intField("Fade Duration (ms)", $doc.animations[index].fade)
+                        intField("Delay (ms)", $doc.animations[index].delay)
                     }
                     .padding(.vertical, 4)
                     .padding(.horizontal, 8)
@@ -203,30 +262,9 @@ struct ThemesTab: View {
             Section("Live Preview") {
                 VStack(alignment: .leading, spacing: 8) {
                     HStack {
-                        Button("Test this theme (10s)") {
-                            let url = AppState.themesDir.appendingPathComponent("\(selected).json")
-                            state.engine.stop()
-                            let profile = KBPProfile(fileURL: url)
-                            let prevTheme = state.effectiveTheme
-                            var prevReactive: ReactiveMode?
-                            if !prevTheme.isEmpty {
-                                let prevURL = AppState.themesDir.appendingPathComponent("\(prevTheme).json")
-                                if let raw = try? ThemeStore.rawDictionary(at: prevURL) {
-                                    prevReactive = ReactiveMode(forEngine: raw)
-                                }
-                            }
-                            previousEffectiveTheme = prevTheme
-                            previousReactiveMode = prevReactive
-                            state.engine.start(profile: profile, reactive: doc.reactive.enabled ? doc.reactive : nil)
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 10) { [previousEffectiveTheme, previousReactiveMode] in
-                                guard let effectiveTheme = previousEffectiveTheme else { return }
-                                let url = AppState.themesDir.appendingPathComponent("\(effectiveTheme).json")
-                                let raw = (try? ThemeStore.rawDictionary(at: url)) ?? [:]
-                                state.engine.start(profile: KBPProfile(fileURL: url), reactive: previousReactiveMode.flatMap { $0 })
-                            }
-                        }
-                        .disabled(selected.isEmpty || (doc.animations.isEmpty && !doc.hasReactive))
-                        .kbGlassButtonStyle()
+                        Button("Test this theme (10s)") { previewTheme() }
+                            .disabled(selected.isEmpty || doc.validate() != nil)
+                            .kbGlassButtonStyle()
                         Button("Show brightness curve") { showBrightnessCurve.toggle() }
                             .kbGlassButtonStyle()
                     }
@@ -235,7 +273,7 @@ struct ThemesTab: View {
                             .frame(height: 150)
                             .padding(.vertical, 8)
                     }
-                    Text("Temporarily applies the theme for 10 seconds.")
+                    Text("Plays the current editor contents, including unsaved edits, for 10 seconds, then returns to the selected theme.")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
@@ -267,10 +305,10 @@ struct ThemesTab: View {
                     HStack {
                         Text("Keystroke access")
                         Spacer()
-                        Text(permissionGranted ? "Granted" : "Required")
-                            .foregroundStyle(permissionGranted ? Color.secondary : Color.yellow)
+                        Text(state.isAccessibilityGranted ? "Granted" : "Required")
+                            .foregroundStyle(state.isAccessibilityGranted ? Color.secondary : Color.yellow)
                     }
-                    if !permissionGranted {
+                    if !state.isAccessibilityGranted {
                         Button("Enable typing reactions") { openAccessibilitySettings() }
                             .kbGlassButtonStyle()
                         Text("Typing-reactive themes need Accessibility permission to observe keystrokes. Without it they rest at zero brightness.")
@@ -290,20 +328,39 @@ struct ThemesTab: View {
             }
         }
         .formStyle(.grouped)
-        .onChange(of: doc.name) { _ in isDirty = true }
-        .onReceive(doc.objectWillChange) { _ in isDirty = true }
-        .onAppear {
-            if selected.isEmpty { selected = state.selectedTheme }
-            loadSelected()
-            permissionGranted = ReactiveEngine.isAccessibilityGranted(prompt: false)
+        // Programmatic loads also emit objectWillChange; ignore those so
+        // loading a file does not immediately mark it dirty.
+        .onReceive(doc.objectWillChange) { _ in
+            if !isLoadingDoc { isDirty = true }
         }
-        .onChange(of: selected) { _ in loadSelected() }
+        .onAppear {
+            state.refreshThemes()
+            if selected.isEmpty { selected = state.selectedTheme }
+            if loadedSelection.isEmpty { loadSelected(selected) }
+        }
+        .onChange(of: selected) { _, newValue in
+            selectionChanged(to: newValue)
+        }
+        .onDisappear { state.cancelPreview() }
+        .alert("New theme", isPresented: $showNew) {
+            TextField("Theme name", text: $newName)
+            Button("Create") { createNewTheme() }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Creates \(newName.isEmpty ? "a new theme" : "\"\(newName).json\"").")
+        }
         .alert("Duplicate theme", isPresented: $showDuplicate) {
             TextField("New theme name", text: $newName)
             Button("Duplicate") { duplicate() }
             Button("Cancel", role: .cancel) {}
         } message: {
             Text("Creates a copy of \"\(selected).json\" named \"\(newName).json\".")
+        }
+        .alert("Delete theme", isPresented: $showDelete) {
+            Button("Move to Trash", role: .destructive) { deleteSelectedTheme() }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Move \"\(selected).json\" to the Trash? This cannot be undone from KBPulse.")
         }
         .alert("KBPulse", isPresented: Binding(
             get: { message != nil },
@@ -314,16 +371,15 @@ struct ThemesTab: View {
             Text(message ?? "")
         }
         .alert("Unsaved changes", isPresented: $showDiscardAlert) {
-            Button("Discard", role: .destructive) {
-                isDirty = false
-                loadSelectedForPending()
+            Button("Discard Changes", role: .destructive) {
+                discardAndLoadPending()
             }
             Button("Cancel", role: .cancel) {
-                selected = pendingSelection.isEmpty ? (doc.name.isEmpty ? "" : doc.name) : pendingSelection
+                selected = loadedSelection
                 pendingSelection = ""
             }
         } message: {
-            Text("You have unsaved edits in \(doc.name.isEmpty ? selected : doc.name). Save or discard them before switching themes.")
+            Text("You have unsaved edits in \(loadedSelection.isEmpty ? selected : loadedSelection). Save or discard them before switching themes.")
         }
     }
 
@@ -351,38 +407,57 @@ struct ThemesTab: View {
 
     // MARK: - Actions
 
-    private func loadSelected() {
-        guard !selected.isEmpty else { return }
-        if isDirty {
-            pendingSelection = selected
-            showDiscardAlert = true
+    private func loadSelected(_ name: String) {
+        guard !name.isEmpty else {
+            doc.reset()
+            loadedSelection = ""
+            isDirty = false
             return
         }
-        do {
-            try doc.load(from: AppState.themesDir.appendingPathComponent("\(selected).json"))
+        isLoadingDoc = true
+        defer {
+            isLoadingDoc = false
             isDirty = false
+        }
+        do {
+            try doc.load(from: AppState.themesDir.appendingPathComponent("\(name).json"))
         } catch {
             // Broken file: keep the editor empty rather than risking stale
             // contents of a previously loaded theme being saved on top.
             doc.reset()
             message = error.localizedDescription
-            isDirty = false
+        }
+        loadedSelection = name
+    }
+
+    private func selectionChanged(to newValue: String) {
+        guard newValue != loadedSelection else { return }
+        if isDirty {
+            pendingSelection = newValue
+            selected = loadedSelection
+            showDiscardAlert = true
+        } else {
+            loadSelected(newValue)
         }
     }
-    
-    private func loadSelectedForPending() {
-        guard !pendingSelection.isEmpty else { return }
-        do {
-            try doc.load(from: AppState.themesDir.appendingPathComponent("\(pendingSelection).json"))
-            isDirty = false
-            selected = pendingSelection
-            pendingSelection = ""
-        } catch {
-            doc.reset()
-            message = error.localizedDescription
-            isDirty = false
-            pendingSelection = ""
+
+    private func discardAndLoadPending() {
+        isDirty = false
+        let target = pendingSelection
+        pendingSelection = ""
+        guard !target.isEmpty else {
+            selected = loadedSelection
+            return
         }
+        selected = target
+        loadSelected(target)
+    }
+
+    private func moveAnimation(_ index: Int, by offset: Int) {
+        let target = index + offset
+        guard doc.animations.indices.contains(index),
+              doc.animations.indices.contains(target) else { return }
+        doc.animations.swapAt(index, target)
     }
 
     private func save() {
@@ -400,28 +475,99 @@ struct ThemesTab: View {
         }
     }
 
-    private func duplicate() {
-        let name = newName.trimmingCharacters(in: .whitespaces)
-        guard !name.isEmpty, !selected.isEmpty else { return }
-        // Case-insensitive collision check — APFS is case-insensitive by default
-        let exists = state.themes.contains { $0.caseInsensitiveCompare(name) == .orderedSame }
-        guard !exists else {
-            message = "A theme named \"\(name)\" already exists."
+    // MARK: - Creating, duplicating, importing, deleting
+
+    /// Validates a prospective file name. APFS is case-insensitive by
+    /// default, so collisions are checked the same way.
+    private func nameError(for rawName: String) -> String? {
+        let name = rawName.trimmingCharacters(in: .whitespacesAndNewlines)
+        if name.isEmpty { return "Enter a theme name." }
+        if name.count > 100 { return "Theme names must be 100 characters or fewer." }
+        if name.hasPrefix(".") { return "Theme names cannot start with a period." }
+        if name.rangeOfCharacter(from: CharacterSet(charactersIn: "/:\\")) != nil {
+            return "Theme names cannot contain /, :, or \\."
+        }
+        if name.caseInsensitiveCompare("hooks") == .orderedSame {
+            return "\"hooks\" is reserved for hooks.json."
+        }
+        if state.themes.contains(where: { $0.caseInsensitiveCompare(name) == .orderedSame }) {
+            return "A theme named \"\(name)\" already exists."
+        }
+        return nil
+    }
+
+    private func createNewTheme() {
+        let name = newName.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let error = nameError(for: name) {
+            message = error
             return
         }
-        var dict = doc.raw
-        dict["Name"] = name
-        guard !dict.isEmpty else {
-            message = "Cannot duplicate a theme that failed to load."
-            return
-        }
+        let theme: [String: Any] = [
+            "Name": name,
+            "Version": "1.0.0",
+            "Description": "",
+            "Author": "",
+            "Homepage": "",
+            "Preview Image URL": "",
+            "Animations": [
+                ["Name": "Fade In", "Description": "", "Brightness": 1.0,
+                 "Fade Duration": 1000, "Delay": 0],
+                ["Name": "Fade Out", "Description": "", "Brightness": 0.0,
+                 "Fade Duration": 1000, "Delay": 0],
+            ],
+        ]
         do {
-            try ThemeStore.write(dict, to: AppState.themesDir.appendingPathComponent("\(name).json"))
-            state.refreshThemes()
+            try ThemeStore.write(theme, to: AppState.themesDir.appendingPathComponent("\(name).json"))
+            state.themeFilesChanged()
+            isDirty = false
             selected = name
+            loadSelected(name)
+            newName = ""
         } catch {
             message = error.localizedDescription
         }
+    }
+
+    private func duplicate() {
+        let name = newName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !selected.isEmpty else { return }
+        if let error = nameError(for: name) {
+            message = error
+            return
+        }
+        if let validationError = doc.validate() {
+            message = "Fix this theme before duplicating: \(validationError)"
+            return
+        }
+        var dict = doc.dictionary()
+        dict["Name"] = name
+        do {
+            try ThemeStore.write(dict, to: AppState.themesDir.appendingPathComponent("\(name).json"))
+            state.themeFilesChanged()
+            isDirty = false
+            selected = name
+            loadSelected(name)
+            newName = ""
+        } catch {
+            message = error.localizedDescription
+        }
+    }
+
+    private func deleteSelectedTheme() {
+        guard !selected.isEmpty else { return }
+        let url = AppState.themesDir.appendingPathComponent("\(selected).json")
+        do {
+            // Move to the Trash so an accidental click is recoverable.
+            try FileManager.default.trashItem(at: url, resultingItemURL: nil)
+        } catch {
+            message = "Could not delete \"\(selected).json\": \(error.localizedDescription)"
+            return
+        }
+        isDirty = false
+        state.themeFilesChanged()
+        let next = state.themes.first ?? ""
+        selected = next
+        loadSelected(next)
     }
 
     private func importPanel() {
@@ -430,14 +576,23 @@ struct ThemesTab: View {
         panel.canChooseDirectories = false
         guard panel.runModal() == .OK, let src = panel.url else { return }
         let name = src.deletingPathExtension().lastPathComponent
-        guard !state.themes.contains(name) else {
-            message = "A theme named \"\(name)\" already exists. Rename the source file and try again."
+        if let error = nameError(for: name) {
+            message = error + " Rename the source file and try again."
             return
         }
         do {
-            try FileManager.default.copyItem(at: src, to: AppState.themesDir.appendingPathComponent("\(name).json"))
-            state.refreshThemes()
+            let dict = try ThemeStore.rawDictionary(at: src)
+            if let themeError = ThemeStore.validateTheme(dict) {
+                message = "That file is not a valid theme: \(themeError)"
+                return
+            }
+            try FileManager.default.copyItem(
+                at: src,
+                to: AppState.themesDir.appendingPathComponent("\(name).json"))
+            state.themeFilesChanged()
+            isDirty = false
             selected = name
+            loadSelected(name)
         } catch {
             message = error.localizedDescription
         }
@@ -446,6 +601,8 @@ struct ThemesTab: View {
     private func exportPanel() {
         let panel = NSSavePanel()
         panel.allowedContentTypes = [.json]
+        panel.canCreateDirectories = true
+        panel.isExtensionHidden = false
         panel.nameFieldStringValue = selected.isEmpty ? doc.name : selected
         panel.directoryURL = AppState.themesDir
         guard panel.runModal() == .OK, let url = panel.url else { return }
@@ -462,12 +619,30 @@ struct ThemesTab: View {
         }
     }
 
+    private func previewTheme() {
+        if let validationError = doc.validate() {
+            message = validationError
+            return
+        }
+        let temp = FileManager.default.temporaryDirectory
+            .appendingPathComponent("KBPulsePreview-\(UUID().uuidString).json")
+        do {
+            try ThemeStore.write(doc.dictionary(), to: temp)
+        } catch {
+            message = error.localizedDescription
+            return
+        }
+        let reactive: ReactiveMode? = (doc.hasReactive && doc.reactive.enabled) ? doc.reactive : nil
+        state.previewTheme(fileURL: temp, reactive: reactive)
+    }
+
     private func openAccessibilitySettings() {
-        _ = ReactiveEngine.isAccessibilityGranted(prompt: true) // system prompt + refresh
-        if !ReactiveEngine.isAccessibilityGranted(prompt: false), let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility") {
+        _ = ReactiveEngine.isAccessibilityGranted(prompt: true) // system prompt
+        state.updateAccessibilityStatus()
+        if !state.isAccessibilityGranted,
+           let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility") {
             NSWorkspace.shared.open(url)
         }
-        permissionGranted = ReactiveEngine.isAccessibilityGranted(prompt: false)
     }
 }
 
@@ -498,7 +673,6 @@ private struct BrightnessCurveView: View {
 
                 // Brightness curve
                 Path { path in
-                    var currentTime = 0
                     var x: CGFloat = 0
                     var y = height * (1 - CGFloat(animations.first?.brightness ?? 0))
                     path.move(to: CGPoint(x: x, y: y))
