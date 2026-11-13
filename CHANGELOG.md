@@ -13,3 +13,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `make build`, `test`, `verify`, `app`, `install`, `run`, `dmg`,
   `release-artifacts`, `release-notes` and `release`. `make run` installs the
   ad-hoc signed app into `~/Applications` and launches it.
+
+## [0.0.1-rc.1] - 2026-11-13
+
+### Added
+
+- Release pipeline trial.
+
