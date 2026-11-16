@@ -2,7 +2,7 @@
 //  HookStore.swift
 //  KBPulseApp
 //
-//  Reads/writes ~/Documents/KBPulse/hooks.json. Settings exposes an editor
+//  Reads/writes ~/Library/Application Support/KBPulse/hooks.json. Settings exposes an editor
 //  for this file on its Hooks tab. AgentHookRuntime reacts to coding-agent
 //  detection and SystemEventRuntime reacts to app launches/terminations,
 //  wake, files landing in Downloads, app frontmost changes, screen lock/

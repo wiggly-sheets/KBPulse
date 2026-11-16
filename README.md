@@ -64,7 +64,7 @@ make release VERSION=1.2.3 REMOTE=fork
 The target then prints `git push fork main` and `git push fork v1.2.3`.
 
 ## Configuration
-Configuration files (.json) are stored in `~/Documents/KBPulse`. (This location will likely change in the future.) Yawn.json is the default theme. Copy it to make your own.
+Configuration files (.json) are stored in `~/Library/Application Support/KBPulse`. Yawn.json is the default theme. Copy it to make your own.
 The array of animations is not limited to two animations. You can add as many as you want!
 
 ### Yawn.json

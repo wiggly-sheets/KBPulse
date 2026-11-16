@@ -2,7 +2,7 @@
 //  ThemeStore.swift
 //  KBPulseApp
 //
-//  Raw JSON read/write for theme files in ~/Documents/KBPulse/, plus the
+//  Raw JSON read/write for theme files in ~/Library/Application Support/KBPulse/, plus the
 //  typing-reactions ("Reactive") section that rides alongside Animations.
 //  Reads/writes the whole dictionary so unknown keys survive a round trip
 //  (KBPProfile's writer would drop them).

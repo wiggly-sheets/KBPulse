@@ -305,7 +305,7 @@ private struct HooksTab: View {
                 Button("Add hook") { add() }
                     .disabled(loadFailed)
                     .kbGlassButtonStyle(prominent: true)
-                Text("Default hooks are created automatically on first launch. The file lives at ~/Documents/KBPulse/hooks.json and the runtime reads it fresh.")
+                Text("Default hooks are created automatically on first launch. The file lives at ~/Library/Application Support/KBPulse/hooks.json and the runtime reads it fresh.")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)

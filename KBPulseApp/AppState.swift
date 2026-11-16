@@ -88,7 +88,7 @@ final class AppState: ObservableObject {
     private var previewEngineWasOn = false
 
     static let themesDir: URL = {
-        guard let dir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first else {
+        guard let dir = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first else {
             return URL(fileURLWithPath: NSHomeDirectory())
         }
         return dir.appendingPathComponent("KBPulse", isDirectory: true)
