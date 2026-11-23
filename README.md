@@ -18,7 +18,7 @@ make run
 ```
 
 `make run` builds the app and the embedded `kbpulse` CLI, signs the bundle
-ad-hoc, installs it into `~/Applications` and launches it. `make test` runs the
+ad-hoc, installs it into `/Applications` and launches it. `make test` runs the
 test suite, `make verify` checks the bundle and the embedded CLI, and
 `make app` writes `build/KBPulse.app`.
 
@@ -30,15 +30,18 @@ You can open the build products folder and copy the binary to a directory of
 your choice instead of using `make install`.
 
 ## Running
-KBPulse has one optional launch argument: the name of the theme (without the path or extension). If you do not provide a launch argument, Yawn will be used.
+The embedded `kbpulse` CLI uses the same themes directory as the app:
+`~/Library/Application Support/KBPulse`.
 
 ```sh
-$ ./kbpulse
+$ kbpulse list
+$ kbpulse validate <file>
+$ kbpulse set <profile>
+$ kbpulse flash
+$ kbpulse off
 ```
 
-```sh
-$ ./kbpulse Yawn
-```
+Run `kbpulse` with no command to animate `Yawn.json` directly.
 
 ## Releases
 Cut a release with the shared target:
