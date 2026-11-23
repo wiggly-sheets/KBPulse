@@ -26,11 +26,10 @@ struct KBPulseApp: App {
         Window("KBPulse Settings", id: "settings") {
             SettingsView(state: state)
                 .hiddenTitlebar()
-                .frame(width: 860, height: 640)
+                .frame(minWidth: 820, minHeight: 600)
         }
         .windowStyle(.hiddenTitleBar)
         .defaultSize(width: 860, height: 640)
-        .windowResizability(.contentSize)
 
         // MenuBarExtra labels do not re-render from observed state, so the
         // status item is inserted or removed through this binding instead.
