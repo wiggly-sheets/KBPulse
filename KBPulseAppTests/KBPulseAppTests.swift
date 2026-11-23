@@ -239,7 +239,7 @@ final class KBPulseAppTests: XCTestCase {
         hook.action = "breathing"
         error = HookStore.validationError(for: hook, themes: ["Yawn", "Pulse"])
         XCTAssertNotNil(error, "breathing action needs theme for musicPlayback")
-        XCTAssertTrue(error!.contains("Breathing hooks need a theme"))
+        XCTAssertTrue(error!.contains("needs a theme"))
 
         hook.theme = "Yawn"
         error = HookStore.validationError(for: hook, themes: ["Yawn", "Pulse"])
@@ -264,6 +264,15 @@ final class KBPulseAppTests: XCTestCase {
         XCTAssertTrue(HookStore.hookTypes.contains("musicVolume"), "hookTypes should contain musicVolume")
         XCTAssertTrue(HookStore.hookTypes.contains("agentAttention"), "hookTypes should contain agentAttention")
         XCTAssertTrue(HookStore.hookTypes.contains("musicPlayback"), "hookTypes should contain musicPlayback after addition")
+    }
+
+    func testHookDisplayNamesAreUserFacing() {
+        for type in HookStore.hookTypes {
+            XCTAssertNotEqual(HookStore.hookTypeDisplayName(type), type)
+        }
+        for action in HookStore.actions {
+            XCTAssertNotEqual(HookStore.actionDisplayName(action), action)
+        }
     }
 
     // MARK: - AppState tests
@@ -374,6 +383,15 @@ final class KBPulseAppTests: XCTestCase {
         XCTAssertEqual(theme.reactive?.decay, -50)
         XCTAssertEqual(theme.reactive?.spaceBump, 3.0)
         XCTAssertFalse(theme.validate().isEmpty)
+    }
+
+    func testReactionBumpMapping() {
+        XCTAssertEqual(ReactiveMode.bump(forVerticalFraction: 0, floor: 0), 1, accuracy: 0.001)
+        XCTAssertEqual(ReactiveMode.bump(forVerticalFraction: 1, floor: 0), 0, accuracy: 0.001)
+        XCTAssertEqual(ReactiveMode.bump(forVerticalFraction: 0, floor: 0.5), 1, accuracy: 0.001)
+        XCTAssertEqual(ReactiveMode.bump(forVerticalFraction: 0.5, floor: 0.5), 0, accuracy: 0.001)
+        XCTAssertEqual(ReactiveMode.bump(forVerticalFraction: 0.5, floor: 0.8), 0, accuracy: 0.001)
+        XCTAssertEqual(ReactiveMode.bump(forVerticalFraction: -1, floor: 2), 0, accuracy: 0.001)
     }
 
     func testThemePreservesUnknownKeysAndFractionalDurations() throws {
@@ -506,6 +524,30 @@ final class KBPulseAppTests: XCTestCase {
         XCTAssertFalse(session.isDirty)
         XCTAssertTrue(FileManager.default.fileExists(atPath: dir.appendingPathComponent("Fresh.json").path))
         XCTAssertEqual(session.themes, ["Fresh", "Second", "Yawn"])
+    }
+
+    func testEditorSessionStructuralEditUndoAndRedo() throws {
+        let dir = try makeThemeDirectory()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let session = ThemeEditorSession(library: ThemeLibrary(root: dir))
+        session.activate(initial: "Yawn")
+        let count = session.theme.animations.count
+        let undoManager = UndoManager()
+
+        undoManager.beginUndoGrouping()
+        session.performStructuralEdit(named: "Add Animation", undoManager: undoManager) {
+            session.theme.animations.append(Theme.Animation(
+                name: "Extra", comment: "", brightness: 0.5, fadeDuration: 100, delay: 0
+            ))
+        }
+        undoManager.endUndoGrouping()
+
+        XCTAssertEqual(session.theme.animations.count, count + 1)
+        XCTAssertTrue(undoManager.canUndo)
+        undoManager.undo()
+        XCTAssertEqual(session.theme.animations.count, count)
+        undoManager.redo()
+        XCTAssertEqual(session.theme.animations.count, count + 1)
     }
 
     // MARK: - Preview session

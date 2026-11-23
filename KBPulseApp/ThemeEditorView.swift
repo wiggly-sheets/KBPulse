@@ -19,6 +19,8 @@ struct ThemesTab: View {
     @State private var showNewSheet = false
     @State private var showDuplicate = false
     @State private var deleteTarget: String?
+    @State private var detailSection: DetailSection = .design
+    @Environment(\.undoManager) private var undoManager
     @State private var searchText = ""
     @State private var isDropTargeted = false
 
@@ -71,7 +73,9 @@ struct ThemesTab: View {
             set: { if !$0 { deleteTarget = nil } }
         )) {
             Button("Move to Trash", role: .destructive) {
-                if let target = deleteTarget { session.deleteTheme(named: target) }
+                if let target = deleteTarget {
+                    session.deleteTheme(named: target, undoManager: undoManager)
+                }
                 deleteTarget = nil
             }
             Button("Cancel", role: .cancel) { deleteTarget = nil }
@@ -242,6 +246,16 @@ struct ThemesTab: View {
         } else {
             Form {
                 Section {
+                    Picker("Section", selection: $detailSection) {
+                        ForEach(DetailSection.allCases) { section in
+                            Text(section.rawValue).tag(section)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                    .labelsHidden()
+                }
+                if detailSection == .info {
+                Section {
                     ThemeIdentityCard(theme: session.theme)
                 }
                 Section("Details") {
@@ -256,6 +270,8 @@ struct ThemesTab: View {
                     TextField("Preview Image URL", text: $session.theme.previewImageURL)
                     if let issue = issue("Preview Image URL") { InlineIssue(issue: issue) }
                 }
+                }
+                if detailSection == .design {
                 Section("Animations") {
                     if let issue = issue("Animations") { InlineIssue(issue: issue) }
                     if session.theme.animations.isEmpty {
@@ -272,7 +288,11 @@ struct ThemesTab: View {
                             onMoveDown: { moveAnimation(index, by: 1) },
                             onDuplicate: { duplicateAnimation(index) },
                             onInsertAfter: { insertAnimation(after: index) },
-                            onDelete: { session.theme.animations.remove(at: index) },
+                            onDelete: {
+                                session.performStructuralEdit(named: "Delete Animation", undoManager: undoManager) {
+                                    session.theme.animations.remove(at: index)
+                                }
+                            },
                             issues: animationIssues(index),
                             onDropAnimation: { id in
                                 moveAnimation(id: id, onto: index)
@@ -281,10 +301,12 @@ struct ThemesTab: View {
                         )
                     }
                     Button("Add Animation") {
-                        session.theme.animations.append(Theme.Animation(
-                            name: "New Animation", comment: "", brightness: 0.5,
-                            fadeDuration: 500, delay: 0
-                        ))
+                        session.performStructuralEdit(named: "Add Animation", undoManager: undoManager) {
+                            session.theme.animations.append(Theme.Animation(
+                                name: "New Animation", comment: "", brightness: 0.5,
+                                fadeDuration: 500, delay: 0
+                            ))
+                        }
                     }
                     .kbGlassButtonStyle()
                     .help("Adds a new animation to the end of the list")
@@ -328,6 +350,8 @@ struct ThemesTab: View {
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
+                }
+                if detailSection == .reactions {
                 Section("Typing Reactions") {
                     Toggle("Typing reactions", isOn: Binding(
                         get: { session.theme.reactive != nil },
@@ -337,17 +361,17 @@ struct ThemesTab: View {
                                 : nil
                         }
                     ))
-                    if let reactive = Binding($session.theme.reactive) {
-                        Toggle("Enabled", isOn: reactive.enabled)
-                        UnitSlider(label: "Bump", value: reactive.bump)
-                        UnitSlider(label: "Resting brightness", value: reactive.floor)
-                        MillisecondSlider(label: "Decay duration", value: reactive.decay)
+                    if session.theme.reactive != nil {
+                        Toggle("Enabled", isOn: reactiveBinding(\.enabled, default: true))
+                        UnitSlider(label: "Bump", value: reactiveBinding(\.bump, default: 0.7))
+                        UnitSlider(label: "Resting brightness", value: reactiveBinding(\.floor, default: 0))
+                        MillisecondSlider(label: "Decay duration", value: reactiveBinding(\.decay, default: 400))
                         DisclosureGroup("Key amounts") {
-                            UnitSlider(label: "Space", value: reactive.spaceBump)
-                            UnitSlider(label: "Enter", value: reactive.enterBump)
-                            UnitSlider(label: "Modifier", value: reactive.modifierBump)
+                            UnitSlider(label: "Space", value: reactiveBinding(\.spaceBump, default: 0.9))
+                            UnitSlider(label: "Enter", value: reactiveBinding(\.enterBump, default: 0.9))
+                            UnitSlider(label: "Modifier", value: reactiveBinding(\.modifierBump, default: 0.5))
                         }
-                        ReactionCurveView(reactive: reactive.wrappedValue)
+                        ReactionCurveView(reactive: $session.theme.reactive)
                         ForEach(reactionIssues, id: \.description) { issue in
                             InlineIssue(issue: issue)
                         }
@@ -379,6 +403,7 @@ struct ThemesTab: View {
                                 .fixedSize(horizontal: false, vertical: true)
                         }
                     }
+                }
                 }
             }
             .formStyle(.grouped)
@@ -419,6 +444,11 @@ struct ThemesTab: View {
             .disabled(session.validationError != nil || isPreviewing)
             .kbGlassButtonStyle()
             Menu {
+                Button("Undo") { undoManager?.undo() }
+                    .disabled(!(undoManager?.canUndo ?? false))
+                Button("Redo") { undoManager?.redo() }
+                    .disabled(!(undoManager?.canRedo ?? false))
+                Divider()
                 Button("Duplicate…") { beginDuplicate() }
                 Button("Export…") { exportPanel() }
                 Divider()
@@ -439,6 +469,14 @@ struct ThemesTab: View {
     }
 
     // MARK: - Actions
+
+    private func reactiveBinding<T>(_ keyPath: WritableKeyPath<ReactiveMode, T>,
+                                   default defaultValue: T) -> Binding<T> {
+        Binding(
+            get: { session.theme.reactive?[keyPath: keyPath] ?? defaultValue },
+            set: { session.theme.reactive?[keyPath: keyPath] = $0 }
+        )
+    }
 
     private func issue(_ path: String) -> ThemeIssue? {
         session.validationIssues.first { $0.path == path }
@@ -465,7 +503,9 @@ struct ThemesTab: View {
         let target = index + offset
         guard session.theme.animations.indices.contains(index),
               session.theme.animations.indices.contains(target) else { return }
-        session.theme.animations.swapAt(index, target)
+        session.performStructuralEdit(named: "Move Animation", undoManager: undoManager) {
+            session.theme.animations.swapAt(index, target)
+        }
     }
 
     private func duplicateAnimation(_ index: Int) {
@@ -480,24 +520,30 @@ struct ThemesTab: View {
             unknown: source.unknown,
             present: source.present
         )
-        session.theme.animations.insert(copy, at: index + 1)
+        session.performStructuralEdit(named: "Duplicate Animation", undoManager: undoManager) {
+            session.theme.animations.insert(copy, at: index + 1)
+        }
     }
 
     private func insertAnimation(after index: Int) {
         guard session.theme.animations.indices.contains(index) else { return }
-        session.theme.animations.insert(
-            Theme.Animation(name: "New Animation", comment: "", brightness: 0.5,
-                            fadeDuration: 500, delay: 0),
-            at: index + 1
-        )
+        session.performStructuralEdit(named: "Insert Animation", undoManager: undoManager) {
+            session.theme.animations.insert(
+                Theme.Animation(name: "New Animation", comment: "", brightness: 0.5,
+                                fadeDuration: 500, delay: 0),
+                at: index + 1
+            )
+        }
     }
 
     private func moveAnimation(id: UUID, onto index: Int) {
         guard let source = session.theme.animations.firstIndex(where: { $0.id == id }),
               source != index else { return }
-        let animation = session.theme.animations.remove(at: source)
-        let target = source < index ? index - 1 : index
-        session.theme.animations.insert(animation, at: max(0, min(target, session.theme.animations.count)))
+        session.performStructuralEdit(named: "Move Animation", undoManager: undoManager) {
+            let animation = session.theme.animations.remove(at: source)
+            let target = source < index ? index - 1 : index
+            session.theme.animations.insert(animation, at: max(0, min(target, session.theme.animations.count)))
+        }
     }
 
     private func save() {
@@ -816,24 +862,30 @@ private struct AnimationTimelineStrip: View {
 }
 
 private struct ReactionCurveView: View {
-    let reactive: ReactiveMode
+    @Binding var reactive: ReactiveMode?
+    @State private var testLabel: String?
+    @State private var testProgress = 0.0
+    @State private var testTask: Task<Void, Never>?
+    @State private var activeBumpLabel: String?
+
+    private var current: ReactiveMode { reactive ?? ReactiveMode() }
 
     private var entries: [(label: String, value: Double, color: Color)] {
         [
-            ("Space", reactive.spaceBump, .blue),
-            ("Enter", reactive.enterBump, .green),
-            ("Modifier", reactive.modifierBump, .orange),
+            ("Space", current.spaceBump, .blue),
+            ("Enter", current.enterBump, .green),
+            ("Modifier", current.modifierBump, .orange),
         ]
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: 6) {
             GeometryReader { geometry in
                 let width = geometry.size.width
                 let height = geometry.size.height
-                let floor = min(max(reactive.floor, 0), 1)
+                let floor = clamped(current.floor)
                 let floorY = height * (1 - CGFloat(floor))
-                ZStack {
+                ZStack(alignment: .topLeading) {
                     Path { path in
                         path.move(to: CGPoint(x: 0, y: floorY))
                         path.addLine(to: CGPoint(x: width, y: floorY))
@@ -843,14 +895,49 @@ private struct ReactionCurveView: View {
 
                     ForEach(entries.indices, id: \.self) { index in
                         let entry = entries[index]
+                        let top = min(1, floor + max(entry.value, 0))
                         Path { path in
-                            let top = min(1, floor + max(entry.value, 0))
                             path.move(to: CGPoint(x: 0, y: height * (1 - CGFloat(top))))
                             path.addLine(to: CGPoint(x: width, y: floorY))
                         }
                         .stroke(entry.color, lineWidth: 2)
+
+                        Circle()
+                            .fill(entry.color)
+                            .frame(width: 12, height: 12)
+                            .position(x: 8 + CGFloat(index) * 12,
+                                      y: height * (1 - CGFloat(top)))
+                    }
+
+                    if let testLabel,
+                       let entry = entries.first(where: { $0.label == testLabel }) {
+                        let top = min(1, floor + max(entry.value, 0))
+                        let value = top + (floor - top) * testProgress
+                        Circle()
+                            .fill(entry.color)
+                            .frame(width: 7, height: 7)
+                            .position(x: width * testProgress,
+                                      y: height * (1 - CGFloat(value)))
                     }
                 }
+                .coordinateSpace(name: "reaction-curve")
+                .contentShape(Rectangle())
+                .highPriorityGesture(
+                    DragGesture(minimumDistance: 0,
+                                coordinateSpace: .named("reaction-curve"))
+                        .onChanged { value in
+                            if activeBumpLabel == nil {
+                                activeBumpLabel = nearestEntry(to: value.startLocation,
+                                                               size: geometry.size).label
+                            }
+                            guard let activeBumpLabel else { return }
+                            let fraction = Double(value.location.y / height)
+                            updateBump(activeBumpLabel,
+                                       to: ReactiveMode.bump(forVerticalFraction: fraction,
+                                                             floor: floor))
+                        }
+                        .onEnded { _ in activeBumpLabel = nil }
+                )
             }
             .frame(height: 80)
             .kbGlassSurface(cornerRadius: 8)
@@ -863,13 +950,85 @@ private struct ReactionCurveView: View {
                         .foregroundStyle(entry.color)
                 }
                 Spacer()
-                Text("\(Int(reactive.decay.rounded())) ms decay")
+                Text("\(Int(current.decay.rounded())) ms decay")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
+
+            HStack(spacing: 6) {
+                ForEach(entries.indices, id: \.self) { index in
+                    let entry = entries[index]
+                    Button("Test \(entry.label)") { runTest(entry) }
+                        .controlSize(.small)
+                        .buttonStyle(.bordered)
+                }
+                Spacer()
+            }
+
+            Text("Drag an endpoint to set its bump. Test simulates one keystroke.")
+                .font(.caption2)
+                .foregroundStyle(.secondary)
         }
         .padding(.vertical, 4)
     }
+
+    private func clamped(_ value: Double) -> Double {
+        min(1, max(0, value))
+    }
+
+    private func nearestEntry(to point: CGPoint, size: CGSize) -> (label: String, value: Double, color: Color) {
+        let floor = clamped(current.floor)
+        let closest = entries.enumerated().min { lhs, rhs in
+            distance(lhs.element, index: lhs.offset, from: point, floor: floor, height: size.height)
+                < distance(rhs.element, index: rhs.offset, from: point, floor: floor, height: size.height)
+        }
+        return closest?.element ?? entries[0]
+    }
+
+    private func distance(_ entry: (label: String, value: Double, color: Color),
+                          index: Int,
+                          from point: CGPoint,
+                          floor: Double,
+                          height: CGFloat) -> CGFloat {
+        let top = min(1, floor + max(entry.value, 0))
+        let x = 8 + CGFloat(index) * 12
+        let y = height * (1 - CGFloat(top))
+        return hypot(point.x - x, point.y - y)
+    }
+
+    private func updateBump(_ label: String, to value: Double) {
+        guard var updated = reactive else { return }
+        let bump = clamped(value)
+        switch label {
+        case "Space": updated.spaceBump = bump
+        case "Enter": updated.enterBump = bump
+        case "Modifier": updated.modifierBump = bump
+        default: break
+        }
+        reactive = updated
+    }
+
+    private func runTest(_ entry: (label: String, value: Double, color: Color)) {
+        testTask?.cancel()
+        testLabel = entry.label
+        testProgress = 0
+        let duration = min(max(current.decay, 0) / 1000, 60)
+        withAnimation(.linear(duration: duration)) { testProgress = 1 }
+        testTask = Task {
+            try? await Task.sleep(nanoseconds: UInt64(max(duration, 0.1) * 1_000_000_000))
+            guard !Task.isCancelled else { return }
+            testLabel = nil
+            testProgress = 0
+        }
+    }
+}
+
+private enum DetailSection: String, CaseIterable, Identifiable {
+    case design = "Design"
+    case reactions = "Reactions"
+    case info = "Info"
+
+    var id: String { rawValue }
 }
 
 private struct ThemeIdentityCard: View {

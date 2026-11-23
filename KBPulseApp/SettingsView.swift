@@ -383,9 +383,9 @@ private struct HooksTab: View {
             Toggle("", isOn: enabledBinding(globalIndex))
                 .labelsHidden()
                 .disabled(loadFailed)
-                .accessibilityLabel("Enable \(hook.hookType) hook")
+                .accessibilityLabel("Enable \(HookStore.hookTypeDisplayName(hook.hookType)) hook")
             VStack(alignment: .leading, spacing: 3) {
-                Text(hook.hookType)
+                Text(HookStore.hookTypeDisplayName(hook.hookType))
                     .font(.subheadline)
                     .fixedSize(horizontal: false, vertical: true)
                 Text(hook.trigger.isEmpty ? "any" : hook.trigger)
@@ -394,7 +394,7 @@ private struct HooksTab: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
             Spacer()
-            Text(hook.action)
+            Text(HookStore.actionDisplayName(hook.action))
                 .font(.subheadline)
                 .fixedSize(horizontal: false, vertical: true)
             Text(hook.theme.isEmpty ? "none" : hook.theme)
@@ -593,8 +593,10 @@ private struct HookEditor: View {
 
     var body: some View {
         Form {
-            Picker("Hook type", selection: $draft.hookType) {
-                ForEach(HookStore.hookTypes, id: \.self) { Text($0).tag($0) }
+            Picker("Event", selection: $draft.hookType) {
+                ForEach(HookStore.hookTypes, id: \.self) { type in
+                    Text(HookStore.hookTypeDisplayName(type)).tag(type)
+                }
             }
             .onChange(of: draft.hookType) { _, _ in
                 let allowed = HookStore.allowedActions(for: draft.hookType)
@@ -602,10 +604,10 @@ private struct HookEditor: View {
                     draft.action = allowed.first ?? draft.action
                 }
             }
-            TextField("Trigger", text: $draft.trigger)
+            TextField(triggerLabel, text: $draft.trigger)
                 .lineLimit(nil)
             if draft.hookType == "agentAttention" || draft.hookType == "agentExit" {
-                Text("Executable name, for example claude or codex. Case-insensitive.")
+                Text("Command name, for example claude or codex. Case-insensitive.")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -646,9 +648,9 @@ private struct HookEditor: View {
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
-            Picker("Action", selection: $draft.action) {
+            Picker("Effect", selection: $draft.action) {
                 ForEach(HookStore.allowedActions(for: draft.hookType), id: \.self) { action in
-                    Text(action.capitalized).tag(action)
+                    Text(HookStore.actionDisplayName(action)).tag(action)
                 }
             }
             Picker("Theme", selection: $draft.theme) {
@@ -701,6 +703,23 @@ private struct HookEditor: View {
         }
         .formStyle(.grouped)
         .frame(width: 520)
+    }
+
+    private var triggerLabel: String {
+        switch draft.hookType {
+        case "agentAttention", "agentExit":
+            return "Agent command"
+        case "appLaunched", "appTerminated", "appFrontmost":
+            return "App"
+        case "fileDownload":
+            return "File name"
+        case "idleThreshold":
+            return "Idle seconds"
+        case "musicVolume":
+            return "Volume"
+        default:
+            return "Trigger"
+        }
     }
 
     /// Zero in the UI means "no cooldown" in the file.

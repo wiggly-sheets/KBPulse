@@ -170,21 +170,38 @@ enum HookStore {
         "musicVolume", "musicPlayback",
     ]
 
-    /// User-friendly display names for hook types.
+    /// User-facing event names. Keep the file keys internal.
     static let hookTypeDisplayNames: [String: String] = [
-        "agentAttention": "Agent Attention",
-        "agentExit": "Agent Exit",
-        "appLaunched": "App Launched",
-        "appTerminated": "App Terminated",
-        "wake": "Wake from Sleep",
-        "fileDownload": "File Downloaded",
-        "appFrontmost": "App Became Frontmost",
-        "screenLock": "Screen Locked",
-        "screenUnlock": "Screen Unlocked",
-        "idleThreshold": "Idle Threshold Reached",
-        "musicVolume": "Volume Changed",
-        "musicPlayback": "Playback Changed",
+        "agentAttention": "Agent is working",
+        "agentExit": "Agent finishes",
+        "appLaunched": "App opens",
+        "appTerminated": "App quits",
+        "wake": "Mac wakes",
+        "fileDownload": "Download finishes",
+        "appFrontmost": "App comes to front",
+        "screenLock": "Screen locks",
+        "screenUnlock": "Screen unlocks",
+        "idleThreshold": "Mac is idle",
+        "musicVolume": "Volume changes",
+        "musicPlayback": "Music plays or pauses",
     ]
+
+    /// User-facing effect names.
+    static let actionDisplayNames: [String: String] = [
+        "flash": "Quick flash",
+        "pulse": "Pulse",
+        "hold": "Hold",
+        "fade": "Fade out",
+        "breathing": "Breathe with theme",
+    ]
+
+    static func hookTypeDisplayName(_ hookType: String) -> String {
+        hookTypeDisplayNames[hookType] ?? hookType
+    }
+
+    static func actionDisplayName(_ action: String) -> String {
+        actionDisplayNames[action] ?? action.capitalized
+    }
 
     /// All supported actions.
     static let actions = ["flash", "pulse", "hold", "fade", "breathing"]
@@ -207,38 +224,39 @@ enum HookStore {
     /// Returns a user-facing problem with `hook`, or nil when it is valid.
     static func validationError(for hook: Hook, themes: [String]) -> String? {
         guard hookTypes.contains(hook.hookType) else {
-            return "Unknown hook type \"\(hook.hookType)\"."
+            return "Unknown event \"\(hook.hookType)\"."
         }
         let allowed = allowedActions(for: hook.hookType)
         guard allowed.contains(hook.action) else {
-            return "Action must be one of \(allowed.joined(separator: ", "))."
+            let names = allowed.map(actionDisplayName).joined(separator: ", ")
+            return "Effect must be one of \(names)."
         }
         if hook.hookType == "agentAttention" && hook.action != "breathing" {
-            return "Agent attention hooks must use the breathing action."
+            return "This event can only use the Breathe with theme effect."
         }
         if isAgentType(hook.hookType) {
             let trigger = hook.trigger.trimmingCharacters(in: .whitespaces)
             if trigger.isEmpty {
-                return "Agent hooks need a trigger (the executable name)."
+                return "Enter the agent command name."
             }
             if trigger.contains("/") {
-                return "Agent trigger must be an executable name, not a path."
+                return "Enter a command name, not a path."
             }
         }
         if hook.hookType == "wake"
             && !hook.trigger.trimmingCharacters(in: .whitespaces).isEmpty {
-            return "Wake hooks must have an empty trigger."
+            return "Mac wakes does not use a trigger."
         }
         if hook.hookType == "screenLock" || hook.hookType == "screenUnlock" {
             if !hook.trigger.trimmingCharacters(in: .whitespaces).isEmpty {
-                return "Screen lock/unlock hooks must have an empty trigger."
+                return "Screen lock and unlock do not use a trigger."
             }
         }
         if hook.hookType == "idleThreshold" {
             let trigger = hook.trigger.trimmingCharacters(in: .whitespaces)
             if !trigger.isEmpty {
                 guard let value = Double(trigger), value > 0 else {
-                    return "Idle threshold trigger must be a positive number of seconds, or empty for default (300 s)."
+                    return "Enter a positive number of seconds, or leave empty for 300."
                 }
             }
         }
@@ -249,7 +267,7 @@ enum HookStore {
             let trigger = hook.trigger.trimmingCharacters(in: .whitespaces)
             if !trigger.isEmpty {
                 guard let threshold = Double(trigger), threshold >= 0, threshold <= 100 else {
-                    return "Music volume trigger must be a number between 0 and 100, or empty for off."
+                    return "Enter a number from 0 to 100, or leave empty to turn this off."
                 }
             }
         }
@@ -257,12 +275,12 @@ enum HookStore {
             // The public MediaPlayer API does not expose the source app, so a
             // non-empty trigger would silently never fire.
             if !hook.trigger.trimmingCharacters(in: .whitespaces).isEmpty {
-                return "Playback hooks cannot filter by app; leave the trigger empty."
+                return "Music playback cannot filter by app. Leave the trigger empty."
             }
         }
         if hook.action == "breathing" {
             guard !hook.theme.isEmpty else {
-                return "Breathing hooks need a theme."
+                return "Breathe with theme needs a theme."
             }
             guard themes.contains(hook.theme) else {
                 return "Theme \"\(hook.theme)\" does not exist."

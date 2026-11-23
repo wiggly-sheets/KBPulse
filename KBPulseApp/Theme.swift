@@ -365,4 +365,12 @@ struct ReactiveMode {
     private static func number(_ value: Any?) -> Double? {
         (value as? NSNumber)?.doubleValue
     }
+
+    /// Maps a vertical position in the curve to a bump amount. The top of
+    /// the curve is 1, the floor line is 0.
+    static func bump(forVerticalFraction fraction: Double, floor: Double) -> Double {
+        let floor = min(1, max(0, floor))
+        let fraction = min(1, max(0, fraction))
+        return min(1, max(0, (1 - fraction - floor) / max(0.01, 1 - floor)))
+    }
 }

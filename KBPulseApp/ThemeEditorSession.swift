@@ -38,6 +38,25 @@ final class ThemeEditorSession: ObservableObject {
         validationIssues.first?.description
     }
 
+    /// Registers one undoable structural edit. Text editing keeps its own
+    /// native undo through the window's undo manager.
+    func performStructuralEdit(named actionName: String,
+                               undoManager: UndoManager?,
+                               _ edit: () -> Void) {
+        let before = theme
+        edit()
+        let after = theme
+        guard let undoManager else { return }
+        undoManager.registerUndo(withTarget: self) { target in
+            target.theme = before
+            undoManager.registerUndo(withTarget: target) { target in
+                target.theme = after
+            }
+            undoManager.setActionName(actionName)
+        }
+        undoManager.setActionName(actionName)
+    }
+
     /// Compares the document with the last loaded or saved snapshot. An empty
     /// selection is never dirty, so clearing the picker cannot prompt.
     var isDirty: Bool {
@@ -176,13 +195,33 @@ final class ThemeEditorSession: ObservableObject {
         deleteTheme(named: selection)
     }
 
-    func deleteTheme(named name: String) {
+    func deleteTheme(named name: String, undoManager: UndoManager? = nil) {
+        let deleted: Theme
         do {
+            deleted = try library.load(name)
             try library.trash(name)
         } catch {
             message = "Could not delete \"\(name).json\": \(error.localizedDescription)"
             return
         }
+        undoManager?.registerUndo(withTarget: self) { target in
+            if !target.library.exists(name) {
+                do {
+                    try target.library.write(deleted, name: name)
+                } catch {
+                    target.message = "Could not restore \"\(name).json\": \(error.localizedDescription)"
+                    return
+                }
+            }
+            target.onFilesChanged()
+            target.refresh()
+            target.load(name)
+            undoManager?.registerUndo(withTarget: target) { target in
+                target.deleteTheme(named: name, undoManager: undoManager)
+            }
+            undoManager?.setActionName("Delete Theme")
+        }
+        undoManager?.setActionName("Delete Theme")
         onFilesChanged()
         refresh()
         if selection == name {
