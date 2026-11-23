@@ -165,8 +165,10 @@ final class ThemeEditorSession: ObservableObject {
         }
         do {
             let imported = try ThemeStore.loadTheme(at: source)
-            if let error = imported.validate().first?.description {
-                message = "That file is not a valid theme: \(error)"
+            let issues = imported.validate()
+            guard issues.isEmpty else {
+                let details = issues.map(\.description).joined(separator: "\n")
+                message = "That file is not a valid theme:\n\(details)"
                 return
             }
             try library.importTheme(from: source, name: name)

@@ -542,6 +542,76 @@ final class KBPulseAppTests: XCTestCase {
         XCTAssertEqual(timeline.duration, 1000.75)
         XCTAssertEqual(timeline.steps.first?.fadeDuration, 1000.5)
     }
+
+    // MARK: - Editor import and names
+
+    func testEditorSessionImportsValidTheme() throws {
+        let dir = try makeThemeDirectory()
+        let sources = FileManager.default.temporaryDirectory
+            .appendingPathComponent("KBPulseSources-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: sources, withIntermediateDirectories: true)
+        defer {
+            try? FileManager.default.removeItem(at: dir)
+            try? FileManager.default.removeItem(at: sources)
+        }
+
+        var imported = Theme.defaultYawn
+        imported.name = "Imported"
+        let source = sources.appendingPathComponent("Imported.json")
+        try ThemeStore.write(imported, to: source)
+
+        let session = ThemeEditorSession(library: ThemeLibrary(root: dir))
+        session.activate(initial: "Yawn")
+        session.importTheme(from: source)
+
+        XCTAssertEqual(session.selection, "Imported")
+        XCTAssertTrue(FileManager.default.fileExists(atPath: dir.appendingPathComponent("Imported.json").path))
+        XCTAssertEqual(session.theme.name, "Imported")
+    }
+
+    func testEditorSessionImportListsEveryIssue() throws {
+        let dir = try makeThemeDirectory()
+        let sources = FileManager.default.temporaryDirectory
+            .appendingPathComponent("KBPulseSources-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: sources, withIntermediateDirectories: true)
+        defer {
+            try? FileManager.default.removeItem(at: dir)
+            try? FileManager.default.removeItem(at: sources)
+        }
+
+        let source = sources.appendingPathComponent("Broken.json")
+        try ThemeStore.write([
+            "Name": "",
+            "Homepage": "example.com",
+            "Animations": [[
+                "Brightness": 2,
+                "Fade Duration": -1,
+                "Delay": 0,
+            ]],
+        ], to: source)
+
+        let session = ThemeEditorSession(library: ThemeLibrary(root: dir))
+        session.activate(initial: "Yawn")
+        session.importTheme(from: source)
+
+        let message = try XCTUnwrap(session.message)
+        XCTAssertTrue(message.contains("Homepage"))
+        XCTAssertTrue(message.contains("Animations[0]"))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: dir.appendingPathComponent("Broken.json").path))
+    }
+
+    func testEditorSessionRejectsNameCollisionsAndReservedHooks() {
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("KBPulseTests-\(UUID().uuidString)")
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+
+        try? ThemeStore.write(Theme.defaultYawn, to: dir.appendingPathComponent("Yawn.json"))
+        let session = ThemeEditorSession(library: ThemeLibrary(root: dir))
+        XCTAssertNotNil(session.nameError(for: "hooks"))
+        XCTAssertNotNil(session.nameError(for: "yawn"))
+        XCTAssertNil(session.nameError(for: "Fresh"))
+    }
 }
 
 private final class FakePreviewPlayer: PreviewPlayer {
