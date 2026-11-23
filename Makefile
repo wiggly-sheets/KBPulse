@@ -12,7 +12,7 @@ CONFIGURATION ?= Release
 BUILD_DIR   := build
 APP_BUNDLE  := $(BUILD_DIR)/$(APP_NAME).app
 RELEASE_DIR := release
-INSTALL_DIR ?= $(HOME)/Applications
+INSTALL_DIR ?= /Applications
 INSTALL_APP := $(INSTALL_DIR)/$(APP_NAME).app
 # The remote the release is cut from. The upstream checkout uses origin; a fork
 # checkout passes REMOTE=fork so the push commands name the fork.
@@ -39,7 +39,7 @@ help:
 		'  test                 Run the changelog check and the Xcode test suite.' \
 		'  verify               Check the bundle, the embedded CLI, the version and the signature.' \
 		'  app                  Build the ad-hoc signed bundle into build/KBPulse.app.' \
-		'  install              Copy the bundle into ~/Applications.' \
+		'  install              Copy the bundle into /Applications.' \
 		'  run                  Install the bundle and launch it.' \
 		'  dmg                  Build the disk image build/KBPulse.dmg.' \
 		'  release-artifacts    Build release/KBPulse-<version>.dmg and its verified checksum.' \
@@ -106,7 +106,7 @@ verify:
 	codesign --verify --deep --strict "$(APP_BUNDLE)"
 	@echo "Verified $(APP_BUNDLE)."
 
-## install — copy the bundle into ~/Applications
+## install — copy the bundle into /Applications
 
 install: app
 	@mkdir -p "$(INSTALL_DIR)"

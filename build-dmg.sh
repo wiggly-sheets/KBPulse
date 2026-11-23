@@ -81,7 +81,7 @@ cp -R "$ACTUAL_APP" "$APP_BUNDLE"
 echo "App bundle: $APP_BUNDLE"
 
 # Ad-hoc sign the bundle, including the embedded CLI helper, so the copy in
-# ~/Applications is a valid target for the system.
+# /Applications is a valid target for the system.
 codesign --force --deep --sign - "$APP_BUNDLE"
 codesign --verify --deep --strict "$APP_BUNDLE"
 echo "Signed ad-hoc: $APP_BUNDLE"
