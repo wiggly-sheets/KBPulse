@@ -12,12 +12,15 @@ import Foundation
 private let bundleIdentifier = "com.ethanrdoesmc.kbpulseapp"
 
 private func usage() {
-    print("Usage: kbpulse [set <profile> | flash | off | list | validate <file>]")
+    print("Usage: kbpulse [set <profile> | flash | off | list | validate <file> | help]")
     print("Run without a command to animate the default profile directly.")
 }
 
 private func handleCommand(_ command: String, _ argument: String?) -> Int32 {
     switch command {
+    case "help", "-h", "--help":
+        usage()
+        return 0
     case "list":
         for name in ThemeLibrary(root: ThemeLocations.themesDir).names() {
             print(name)
