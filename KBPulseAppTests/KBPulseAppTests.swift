@@ -714,6 +714,11 @@ final class KBPulseAppTests: XCTestCase {
         XCTAssertTrue(session.theme.animations.isEmpty)
         XCTAssertTrue(FileManager.default.fileExists(atPath: dir.appendingPathComponent("Keys.json").path))
     }
+
+    func testSystemVolumeClientReturnsUnitRange() {
+        let volume = SystemVolumeClient.systemOutputVolume()
+        XCTAssertTrue((0...1).contains(volume))
+    }
 }
 
 private final class FakePreviewPlayer: PreviewPlayer {

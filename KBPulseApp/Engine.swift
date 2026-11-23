@@ -2,7 +2,7 @@
 //  Engine.swift
 //  KBPulseApp
 //
-//  In-process animation engine: loops the active profile's animations on a
+//  In-process animation engine: loops the active theme's animations on a
 //  background thread through the CoreBrightness-backed KBPAnimator.
 //
 //  Hooks overlay the base loop: a hook calls `overlay(_:)`, which runs its
@@ -22,7 +22,7 @@ final class Engine {
     private var runID = 0
     private let runIDLock = NSLock()
     private var thread: Thread?
-    private var profile: KBPProfile?
+    private var theme: Theme?
     private var reactive: ReactiveMode?
     private var overlay: ((Int) -> Void)?
     private let overlayLock = NSLock()
@@ -32,9 +32,9 @@ final class Engine {
     private let reactiveEngineLock = NSLock()
     private var stopSemaphore: DispatchSemaphore?
 
-    func start(profile: KBPProfile, reactive: ReactiveMode?) {
+    func start(theme: Theme, reactive: ReactiveMode?) {
         stop()
-        self.profile = profile
+        self.theme = theme
         self.reactive = reactive
         spawn()
     }
@@ -45,7 +45,7 @@ final class Engine {
         reactiveEngineLock.lock()
         let reactive = reactiveEngine
         reactiveEngineLock.unlock()
-        guard reactive == nil, profile != nil else { return }
+        guard reactive == nil, theme != nil else { return }
         overlayLock.lock()
         overlay = work
         overlayLock.unlock()
@@ -125,7 +125,7 @@ final class Engine {
         overlay = nil
         overlayLock.unlock()
         thread = nil
-        profile = nil
+        theme = nil
         reactive = nil
     }
 
@@ -134,13 +134,14 @@ final class Engine {
     func setTheme(_ name: String) {
         let url = AppState.themesDir.appendingPathComponent("\(name).json")
         guard FileManager.default.fileExists(atPath: url.path) else { return }
+        guard let theme = try? ThemeStore.loadTheme(at: url) else { return }
         let raw = (try? ThemeStore.rawDictionary(at: url)) ?? [:]
         stop()
-        start(profile: KBPProfile(fileURL: url), reactive: ReactiveMode(forEngine: raw))
+        start(theme: theme, reactive: ReactiveMode(forEngine: raw))
     }
 
     private func spawn() {
-        guard let profile else { return }
+        guard let theme else { return }
         let reactive = self.reactive
         let id = bumpRunID()
         let sema = DispatchSemaphore(value: 0)
@@ -148,14 +149,14 @@ final class Engine {
         let name = reactive == nil ? "KBPEngine" : "KBPReactiveEngine"
         let thread = Thread(block: { [weak self] in
             defer { sema.signal() }
-            self?.run(id: id, profile: profile, reactive: reactive)
+            self?.run(id: id, theme: theme, reactive: reactive)
         })
         thread.name = name
         self.thread = thread
         thread.start()
     }
 
-    private func run(id: Int, profile: KBPProfile, reactive: ReactiveMode?) {
+    private func run(id: Int, theme: Theme, reactive: ReactiveMode?) {
         while isCurrent(id) {
             // Run a pending overlay once, then fall through to the base loop.
             overlayLock.lock()
@@ -175,22 +176,14 @@ final class Engine {
                 // Tap unavailable (no Accessibility permission, or creation
                 // failed): fall back to the theme's animations, or fade off
                 // when there are none, then retry reactive mode next pass.
-                if profile.animations.isEmpty {
+                if theme.animations.isEmpty {
                     KBPAnimator.setBrightness(0, withDuration: 1000)
                     sleepChunks(1.0, id: id)
                     continue
                 }
             }
-            guard profile.animations.count > 0 else { return }
-            var playback: [KBPAnimation] = []
-            for case let animation as KBPAnimation in profile.animations {
-                playback.append(animation)
-            }
-            let timeline = ThemeTimeline(
-                brightness: playback.map { Double($0.brightness.floatValue) },
-                fadeDurations: playback.map { $0.fadeDuration.doubleValue },
-                delays: playback.map { $0.delay.doubleValue }
-            )
+            guard !theme.animations.isEmpty else { return }
+            let timeline = ThemeTimeline(animations: theme.animations)
             for step in timeline.steps {
                 guard isCurrent(id) else { return }
                 let brightness = Float(min(1, max(0, step.brightness)))

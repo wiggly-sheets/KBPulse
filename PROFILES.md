@@ -1,22 +1,18 @@
 # KBPulse Profiles
 
-Profiles are implemented in .json for readability and simplicity. At the moment, *all* fields must be present. That's not a technical limitation -- I've just been really busy with college and haven't had the time to implement something to handle that. 
-
-**For now, consider all fields as effectively required, but I am going to mark optional fields as such.**
-
-Profiles correspond to `KBPProfile`, and the animations are `KBPAnimation`s.
+Profiles are JSON documents decoded into `Theme`. Missing fields get defaults. `Theme.validate()` reports values that would not play correctly.
 
 ## Top-Level
-```objective-c
-@interface KBPProfile
+```swift
+struct Theme
 ```
 
 ### Name
 ```json
 "Name" : "Cool Profile",
 ```
-```objective-c
-@property NSString *name;
+```swift
+var name: String
 ```
 **Required**. Should generally match your file name, but you can add extra details here (i.e. `theme_slow.json` can have `Theme (slow)` for `Name`. It can technically be anything, but try not to be confusing to the user.
 
@@ -24,17 +20,17 @@ Profiles correspond to `KBPProfile`, and the animations are `KBPAnimation`s.
 ```json
 "Version" : "1.0.0",
 ```
-```objective-c
-@property NSString *versionNumber;
+```swift
+var version: String
 ```
-**Required**. Try to use the MAJOR.MINOR.PATCH semantic versioning format.
+*Optional but recommended*. Try to use the MAJOR.MINOR.PATCH semantic versioning format.
 
 ### Description
 ```json
 "Description" : "A short description of your profile in a calm fragment that makes a comparison at the end",
 ```
-```objective-c
-@property (nullable) NSString *comment;
+```swift
+var comment: String
 ```
 *Optional*. You can put anything into the description, but I put extra effort into coming up with the "style" of the built-in profiles' descriptions. There's a formula:
 
@@ -46,8 +42,8 @@ If you want to follow this formula, remember to not make a complete sentence. Yo
 ```json
 "Author" : "EthanRDoesMC",
 ```
-```objective-c
-@property (nullable) NSString *author;
+```swift
+var author: String
 ```
 *Optional but recommended*.
 
@@ -55,8 +51,8 @@ If you want to follow this formula, remember to not make a complete sentence. Yo
 ```json
 "Homepage" : "https://github.com/EthanRDoesMC/KBPulse/",
 ```
-```objective-c
-@property (nullable) NSString *homepage;
+```swift
+var homepage: String
 ```
 *Optional*. Try not to use *your* homepage. Instead, try to link to the website (or GitHub repo/gist) *for the profile*.
 
@@ -64,8 +60,8 @@ If you want to follow this formula, remember to not make a complete sentence. Yo
 ```json
 "Preview Image URL" : "https://example.com/image.jpeg",
 ```
-```objective-c
-@property (nullable) NSString *previewImageURL;
+```swift
+var previewImageURL: String
 ```
 *Optional*. Not a big priority, but should I implement a UI one day, it would be really nice if community profiles already had preview images.
 
@@ -79,14 +75,12 @@ If you want to follow this formula, remember to not make a complete sentence. Yo
 ],
 ```
     
-```objective-c
-@property NSArray *animations;
-
-@interface KBPAnimation
+```swift
+var animations: [Theme.Animation]
 ```
 
 ### Name
-Same as above, but optional. For your own reference.
+**Required**. Shown in the editor.
 
 ### Description
 Same as above, but optional. *This* description is for *your* reference, so you don't have to worry about making it nice.
@@ -95,8 +89,8 @@ Same as above, but optional. *This* description is for *your* reference, so you 
 ```json
 "Brightness" : 0.5,
 ```
-```objective-c
-@property NSNumber *brightness;
+```swift
+var brightness: Double
 ```
 **Required**. Any `double` between and including 0.0 and 1.0. The brightness value that the backlight will be set to.
 
@@ -104,16 +98,16 @@ Same as above, but optional. *This* description is for *your* reference, so you 
 ```json
 "Fade Duration" : 2500,
 ```
-```objective-c
-@property NSNumber *fadeDuration;
+```swift
+var fadeDuration: Double
 ```
-**Required**. An integer in milliseconds for how long the brightness fade-in will take.
+**Required**. Milliseconds for how long the brightness fade-in will take. Fractional values are allowed.
 
 ### Delay
 ```json
 "Delay" : 2500,
 ```
-```objective-c
-@property NSNumber *delay;
+```swift
+var delay: Double
 ```
-**Required**. An integer in milliseconds that specifies how long KBPulse will wait *after* the current fade animation completes before starting the next animation.
+**Required**. Milliseconds that KBPulse waits *after* the current fade animation completes before starting the next animation. Fractional values are allowed.

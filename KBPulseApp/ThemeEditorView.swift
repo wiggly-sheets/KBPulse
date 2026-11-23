@@ -3,7 +3,7 @@
 //  KBPulseApp
 //
 //  Themes tab of the Settings window: edit, duplicate, import and export
-//  theme JSON files. Form fields map 1:1 to the KBPProfile/ReactiveMode
+//  theme JSON files. Form fields map 1:1 to the Theme/ReactiveMode
 //  schema (Name, Description, Brightness, Fade Duration, Delay, Reactive);
 //  unknown keys in the file are preserved verbatim through saves.
 //

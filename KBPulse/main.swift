@@ -83,15 +83,16 @@ private func animateDefaultProfile() -> Never {
         print("Could not load Yawn.json.")
         exit(1)
     }
-    let profile = KBPProfile(dictionary: theme.dictionary())
-    var interval = profile.totalDuration().doubleValue
+    let timeline = ThemeTimeline(animations: theme.animations)
+    var interval = timeline.duration / 1000
     if interval <= 0 { interval = 1.0 }
 
     Timer.scheduledTimer(withTimeInterval: interval, repeats: true) { _ in
-        for case let animation as KBPAnimation in profile.animations {
-            KBPAnimator.setBrightness(animation.brightness.floatValue,
-                                      withDuration: animation.fadeDuration.int32Value)
-            Thread.sleep(forTimeInterval: animation.totalDuration().doubleValue / 1000)
+        for step in timeline.steps {
+            let brightness = Float(min(1, max(0, step.brightness)))
+            let fade = Int32(max(0, step.fadeDuration.rounded()))
+            KBPAnimator.setBrightness(brightness, withDuration: fade)
+            Thread.sleep(forTimeInterval: max((step.fadeDuration + step.delay) / 1000, 0.001))
         }
     }
 

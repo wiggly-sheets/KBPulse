@@ -300,7 +300,8 @@ final class AppState: ObservableObject {
         let url = Self.themesDir.appendingPathComponent("\(theme).json")
         guard FileManager.default.fileExists(atPath: url.path) else { return }
         let raw = (try? ThemeStore.rawDictionary(at: url)) ?? [:]
-        engine.start(profile: KBPProfile(fileURL: url), reactive: ReactiveMode(forEngine: raw))
+        guard let theme = try? ThemeStore.loadTheme(at: url) else { return }
+        engine.start(theme: theme, reactive: ReactiveMode(forEngine: raw))
     }
 
     // MARK: - Temporary theme preview

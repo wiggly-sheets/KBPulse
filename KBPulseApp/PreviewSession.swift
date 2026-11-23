@@ -18,7 +18,7 @@ struct EnginePreviewPlayer: PreviewPlayer {
 
     func play(theme: Theme, reactive: ReactiveMode?) {
         engine.stop()
-        engine.start(profile: KBPProfile(dictionary: theme.dictionary()), reactive: reactive)
+        engine.start(theme: theme, reactive: reactive)
     }
 
     func stop() {
