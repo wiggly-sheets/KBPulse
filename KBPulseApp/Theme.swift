@@ -21,7 +21,7 @@ struct ThemeIssue: Equatable {
 struct Theme {
     static let knownKeys: Set<String> = [
         "Name", "Description", "Author", "Version", "Homepage",
-        "Preview Image URL", "Animations", "Reactive",
+        "Preview Image URL", "Animations", "Reactive", "Haptics",
     ]
 
     var name = ""
@@ -32,6 +32,7 @@ struct Theme {
     var previewImageURL = ""
     var animations: [Animation] = []
     var reactive: ReactiveMode?
+    var haptics = false
     var unknown: [String: Any] = [:]
     var present: Set<String> = []
 
@@ -110,6 +111,7 @@ struct Theme {
         if let section = dictionary["Reactive"] as? [String: Any] {
             reactive = ReactiveMode(section: section)
         }
+        haptics = (dictionary["Haptics"] as? NSNumber)?.boolValue ?? false
         present = Set(dictionary.keys).intersection(Self.knownKeys)
         var extra: [String: Any] = [:]
         for (key, value) in dictionary where !Self.knownKeys.contains(key) {
@@ -196,6 +198,9 @@ struct Theme {
             dict["Reactive"] = reactive.dictionary()
         } else {
             dict.removeValue(forKey: "Reactive")
+        }
+        if haptics || present.contains("Haptics") {
+            dict["Haptics"] = haptics
         }
         return dict
     }

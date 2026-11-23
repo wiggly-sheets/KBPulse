@@ -31,6 +31,11 @@ final class Engine {
     private var reactiveEngine: ReactiveEngine?
     private let reactiveEngineLock = NSLock()
     private var stopSemaphore: DispatchSemaphore?
+    private let haptics: HapticPlayer
+
+    init(haptics: HapticPlayer = SystemHapticPlayer()) {
+        self.haptics = haptics
+    }
 
     func start(theme: Theme, reactive: ReactiveMode?) {
         stop()
@@ -170,7 +175,8 @@ final class Engine {
             }
             if let reactive {
                 guard isCurrent(id) else { return }
-                let ran = runReactive(ReactiveEngine(), cfg: reactive, id: id)
+                let reactiveHaptics: HapticPlayer = theme.haptics ? haptics : NoopHapticPlayer()
+                let ran = runReactive(ReactiveEngine(haptic: reactiveHaptics), cfg: reactive, id: id)
                 guard isCurrent(id) else { return }
                 if ran { return }
                 // Tap unavailable (no Accessibility permission, or creation
@@ -186,6 +192,7 @@ final class Engine {
             let timeline = ThemeTimeline(animations: theme.animations)
             for step in timeline.steps {
                 guard isCurrent(id) else { return }
+                if theme.haptics { haptics.tap() }
                 let brightness = Float(min(1, max(0, step.brightness)))
                 let fade = Int32(max(0, step.fadeDuration.rounded()))
                 KBPAnimator.setBrightness(brightness, withDuration: fade)

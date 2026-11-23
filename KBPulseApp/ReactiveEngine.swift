@@ -23,6 +23,7 @@ final class ReactiveEngine {
         var timestamp = 0.0  // last keystroke time, ms since boot
         var seq = 0          // bump counter; identifies the last event
         var hasEvent = false
+        var onBump: (() -> Void)?
     }
 
     private var tap: CFMachPort?
@@ -33,6 +34,11 @@ final class ReactiveEngine {
     private var pendingImpulse: Double?
     private var stale: (() -> Bool)?
     private var lastTapCheck = 0.0
+    private let haptic: HapticPlayer
+
+    init(haptic: HapticPlayer = NoopHapticPlayer()) {
+        self.haptic = haptic
+    }
 
     static func isAccessibilityGranted(prompt: Bool) -> Bool {
         AXIsProcessTrustedWithOptions([kAXTrustedCheckOptionPrompt.takeUnretainedValue(): prompt] as CFDictionary)
@@ -71,6 +77,7 @@ final class ReactiveEngine {
         s.hasEvent = true
         s.lock.unlock()
         stateLock.unlock()
+        haptic.tap()
     }
 
     /// Blocks the calling thread (must have a run loop) until `stale()` turns
@@ -84,6 +91,7 @@ final class ReactiveEngine {
         let s = State()
         s.lock.lock()
         s.cfg = cfg
+        s.onBump = { [weak self] in self?.haptic.tap() }
         s.lock.unlock()
         stateLock.lock()
         state = s
@@ -201,6 +209,7 @@ final class ReactiveEngine {
         s.timestamp = ProcessInfo.processInfo.systemUptime * 1000
         s.seq += 1
         s.hasEvent = true
+        s.onBump?()
         return nil
     }
 }

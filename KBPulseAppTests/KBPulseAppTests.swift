@@ -414,6 +414,16 @@ final class KBPulseAppTests: XCTestCase {
         XCTAssertEqual(roundTrip.animations.first?.fadeDuration, 1000.5)
     }
 
+    func testThemeHapticsRoundTrip() {
+        var theme = Theme.defaultYawn
+        theme.haptics = true
+        XCTAssertEqual(Theme(dictionary: theme.dictionary()).haptics, true)
+
+        var off = Theme.defaultYawn
+        off.haptics = false
+        XCTAssertNil(off.dictionary()["Haptics"])
+    }
+
     func testThemeValidationRequiresAnimationNamesAndValidURLs() {
         let theme = Theme(dictionary: [
             "Name": "Test",
@@ -606,6 +616,7 @@ final class KBPulseAppTests: XCTestCase {
         ])
 
         XCTAssertEqual(timeline.duration, 350)
+        XCTAssertEqual(timeline.accentTimes, [0, 150])
         XCTAssertEqual(timeline.brightness(at: 0), 0)
         XCTAssertEqual(timeline.brightness(at: 50), 0.5)
         XCTAssertEqual(timeline.brightness(at: 100), 1)

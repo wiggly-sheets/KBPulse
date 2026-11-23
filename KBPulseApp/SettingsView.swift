@@ -60,6 +60,11 @@ struct SettingsView: View {
     private var general: some View {
         Form {
             Toggle("Animation engine", isOn: state.engineBinding)
+            Toggle("Trackpad haptics", isOn: state.hapticsBinding)
+            Text("Master switch. When off, no theme taps. Turn it on, then enable haptics per theme.")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
             Picker("Theme", selection: state.themeBinding) {
                 ForEach(state.themes, id: \.self) { Text($0).tag($0) }
             }

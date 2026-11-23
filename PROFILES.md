@@ -65,6 +65,15 @@ var previewImageURL: String
 ```
 *Optional*. Not a big priority, but should I implement a UI one day, it would be really nice if community profiles already had preview images.
 
+### Haptics
+```json
+"Haptics" : true,
+```
+```swift
+var haptics: Bool
+```
+*Optional, default false.* When true, KBPulse taps the trackpad at each animation beat or typing bump. The user must also turn on **Trackpad haptics** in Settings > General. Works for animation themes and reactive themes.
+
 ## Animations
 ```json
 "Animations" = [

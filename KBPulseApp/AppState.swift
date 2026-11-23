@@ -63,6 +63,9 @@ final class AppState: ObservableObject {
     
     @Published var themes: [String] = []
     @Published private(set) var engineOn = true
+    @Published var hapticsEnabled = false {
+        didSet { UserDefaults.standard.set(hapticsEnabled, forKey: "hapticsEnabled") }
+    }
     @Published private(set) var selectedTheme = ""
     /// Transient hook theme layered over the persisted base theme. Never saved.
     @Published private(set) var overrideTheme: String?
@@ -119,6 +122,7 @@ final class AppState: ObservableObject {
         ThemeStore.createReactiveExampleIfMissing()
         let defaults = UserDefaults.standard
         engineOn = defaults.object(forKey: "engineEnabled") as? Bool ?? true
+        hapticsEnabled = defaults.object(forKey: "hapticsEnabled") as? Bool ?? false
         iconDisplayMode = IconDisplayMode(rawValue: defaults.string(forKey: "iconDisplayMode") ?? "menu") ?? .menuBarOnly
         refreshThemes()
         refreshCLIStatus()
@@ -192,6 +196,10 @@ final class AppState: ObservableObject {
 
     var engineBinding: Binding<Bool> {
         Binding(get: { self.engineOn }, set: { self.setEngine($0) })
+    }
+
+    var hapticsBinding: Binding<Bool> {
+        Binding(get: { self.hapticsEnabled }, set: { self.hapticsEnabled = $0 })
     }
 
     var themeBinding: Binding<String> {

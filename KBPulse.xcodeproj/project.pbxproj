@@ -20,6 +20,7 @@
 		4F9B0000000000000000005D /* main.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F9B0000000000000000005C /* main.swift */; };
 		4F9B0000000000000000005F /* SystemVolumeClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F9B0000000000000000005E /* SystemVolumeClient.swift */; };
 		4F9B00000000000000000060 /* SystemVolumeClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F9B0000000000000000005E /* SystemVolumeClient.swift */; };
+		4F9B00000000000000000062 /* HapticPlayer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F9B00000000000000000063 /* HapticPlayer.swift */; };
 		4F9B00000000000000000052 /* ThemeLibrary.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F9B00000000000000000051 /* ThemeLibrary.swift */; };
 		4F9B00000000000000000054 /* ThemeEditorSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F9B00000000000000000053 /* ThemeEditorSession.swift */; };
 		4F9B00000000000000000056 /* PreviewSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F9B00000000000000000055 /* PreviewSession.swift */; };
@@ -100,6 +101,7 @@
 		4F9B00000000000000000055 /* PreviewSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PreviewSession.swift; sourceTree = "<group>"; };
 		4F9B00000000000000000057 /* ThemeTimeline.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThemeTimeline.swift; sourceTree = "<group>"; };
 		4F9B0000000000000000005E /* SystemVolumeClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SystemVolumeClient.swift; sourceTree = "<group>"; };
+		4F9B00000000000000000063 /* HapticPlayer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HapticPlayer.swift; sourceTree = "<group>"; };
 		4F9B0000000000000000001D /* ReactiveEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReactiveEngine.swift; sourceTree = "<group>"; };
 		4F9B0000000000000000001E /* ThemeEditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThemeEditorView.swift; sourceTree = "<group>"; };
 		4F9B00000000000000000025 /* CLISymlinkManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CLISymlinkManager.swift; sourceTree = "<group>"; };
@@ -217,6 +219,7 @@
 				49BCBCAA427398D8889A812F /* AgentMonitor.swift */,
 				493B366651A62F2550960559 /* AgentHookRuntime.swift */,
 		4F9B0000000000000000005E /* SystemVolumeClient.swift */,
+		4F9B00000000000000000063 /* HapticPlayer.swift */,
 			);
 			path = KBPulseApp;
 			sourceTree = "<group>";
@@ -376,6 +379,7 @@
 				07462BD03687EDDA6A3403B8 /* AgentMonitor.swift in Sources */,
 				9956C14B64915C68D2C7C882 /* AgentHookRuntime.swift in Sources */,
 				4F9B0000000000000000005F /* SystemVolumeClient.swift in Sources */,
+				4F9B00000000000000000062 /* HapticPlayer.swift in Sources */,
 				4F9B00000000000000000009 /* KBPPulseManager.m in Sources */,
 				4F9B00000000000000000006 /* KBPAnimator.m in Sources */,
 			);

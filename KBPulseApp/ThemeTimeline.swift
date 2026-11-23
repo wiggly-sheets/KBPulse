@@ -15,6 +15,9 @@ struct ThemeTimeline: Equatable {
 
     var duration: Double { steps.last?.endTime ?? 0 }
 
+    /// Haptic taps land when each fade starts.
+    var accentTimes: [Double] { steps.map(\.startTime) }
+
     init(animations: [Theme.Animation]) {
         self.init(
             brightness: animations.map(\.brightness),

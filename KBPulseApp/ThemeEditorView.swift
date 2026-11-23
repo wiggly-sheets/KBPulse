@@ -311,6 +311,13 @@ struct ThemesTab: View {
                     .kbGlassButtonStyle()
                     .help("Adds a new animation to the end of the list")
                 }
+                Section("Haptics") {
+                    Toggle("Haptics for this theme", isOn: $session.theme.haptics)
+                    Text("Taps the trackpad at each animation beat or typing bump. Only plays when the global Trackpad haptics switch is on.")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
                 Section("Live Preview") {
                     if !session.validationIssues.isEmpty {
                         Text("Preview is blocked until the highlighted issues are fixed.")
