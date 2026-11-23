@@ -10,10 +10,29 @@ SCHEME      ?= kbpulse
 TEST_SCHEME := KBPulseAppTests
 CONFIGURATION ?= Release
 BUILD_DIR   := build
-APP_BUNDLE  := $(BUILD_DIR)/$(APP_NAME).app
+ARCH_ARM    := arm64
+ARCH_INTEL  := x86_64
+APP_ARM     := $(BUILD_DIR)/$(APP_NAME)-$(ARCH_ARM).app
+APP_INTEL   := $(BUILD_DIR)/$(APP_NAME)-$(ARCH_INTEL).app
+DMG_ARM     := $(BUILD_DIR)/$(APP_NAME)-$(ARCH_ARM).dmg
+DMG_INTEL   := $(BUILD_DIR)/$(APP_NAME)-$(ARCH_INTEL).dmg
+# The bundles that verify checks. Narrow it for one slice with
+# BUNDLES=build/KBPulse-arm64.app on the command line.
+BUNDLES     ?= $(APP_ARM) $(APP_INTEL)
+HOST_ARCH   := $(shell uname -m)
 RELEASE_DIR := release
 INSTALL_DIR ?= /Applications
 INSTALL_APP := $(INSTALL_DIR)/$(APP_NAME).app
+
+# install and run touch the slice of the machine that runs them.
+ifeq ($(HOST_ARCH),$(ARCH_ARM))
+HOST_BUNDLE     := $(APP_ARM)
+HOST_APP_TARGET := app-arm
+else ifeq ($(HOST_ARCH),$(ARCH_INTEL))
+HOST_BUNDLE     := $(APP_INTEL)
+HOST_APP_TARGET := app-intel
+endif
+
 # The remote the release is cut from. The upstream checkout uses origin; a fork
 # checkout passes REMOTE=fork so the push commands name the fork.
 REMOTE ?= origin
@@ -23,8 +42,9 @@ REMOTE ?= origin
 VERSION ?=
 BUILD_NUMBER ?= $(shell git rev-list --count HEAD 2>/dev/null || echo 1)
 
-.PHONY: help build test verify app install run dmg release-artifacts \
-	release-notes release clean _require_version
+.PHONY: help build test verify app app-arm app-intel install run \
+	dmg dmg-arm dmg-intel release-artifacts release-notes release clean \
+	_require_version
 
 .DEFAULT_GOAL := help
 
@@ -37,12 +57,19 @@ help:
 		'  help                 List every target (default).' \
 		'  build                Build the app and the embedded CLI with xcodebuild.' \
 		'  test                 Run the changelog check and the Xcode test suite.' \
-		'  verify               Check the bundle, the embedded CLI, the version and the signature.' \
-		'  app                  Build the ad-hoc signed bundle into build/KBPulse.app.' \
-		'  install              Copy the bundle into /Applications.' \
+		'  verify               Check both bundles, the embedded CLI, the architecture,' \
+		'                       the version and the signature.' \
+		'  app                  Build both ad-hoc signed bundles into build/: KBPulse-arm64.app' \
+		'                       and KBPulse-x86_64.app.' \
+		'  app-arm              Build the Apple silicon bundle only.' \
+		'  app-intel            Build the Intel bundle only.' \
+		'  install              Copy the bundle of this machine into /Applications.' \
 		'  run                  Install the bundle and launch it.' \
-		'  dmg                  Build the disk image build/KBPulse.dmg.' \
-		'  release-artifacts    Build release/KBPulse-<version>.dmg and its verified checksum.' \
+		'  dmg                  Build build/KBPulse-arm64.dmg and build/KBPulse-x86_64.dmg.' \
+		'  dmg-arm              Build the Apple silicon disk image only.' \
+		'  dmg-intel            Build the Intel disk image only.' \
+		'  release-artifacts    Build release/KBPulse-<version>-arm64.dmg,' \
+		'                       release/KBPulse-<version>-x86_64.dmg and release/checksums.txt.' \
 		'  release-notes VERSION=x.y.z  Print the changelog section of a version.' \
 		'  release VERSION=x.y.z  Bump the changelog, test, build, verify, commit and tag.' \
 		'  clean                Remove build/ and release/.' \
@@ -80,42 +107,76 @@ test:
 		-derivedDataPath "$(BUILD_DIR)/TestDerivedData" \
 		CODE_SIGNING_ALLOWED=NO
 
-## app — the signed bundle
+## app — both signed bundles
 
-app:
+app: app-arm app-intel
+
+## app-arm — the Apple silicon bundle
+
+app-arm:
 	MARKETING_VERSION="$(VERSION)" CURRENT_PROJECT_VERSION="$(BUILD_NUMBER)" \
-		./build-dmg.sh app "$(CONFIGURATION)"
+		./build-dmg.sh app $(ARCH_ARM) "$(CONFIGURATION)"
 
-## verify — check the built bundle
+## app-intel — the Intel bundle
+
+app-intel:
+	MARKETING_VERSION="$(VERSION)" CURRENT_PROJECT_VERSION="$(BUILD_NUMBER)" \
+		./build-dmg.sh app $(ARCH_INTEL) "$(CONFIGURATION)"
+
+## verify — check the built bundles
 
 verify:
-	@test -d "$(APP_BUNDLE)" || { \
-		echo "error: $(APP_BUNDLE) is missing. Run make app first."; \
-		exit 1; \
-	}
-	@test -x "$(APP_BUNDLE)/Contents/Helpers/kbpulse" || { \
-		echo "error: the kbpulse CLI is not embedded in $(APP_BUNDLE)."; \
-		exit 1; \
-	}
-	@if [ -n "$(strip $(VERSION))" ]; then \
-		version="$$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$(APP_BUNDLE)/Contents/Info.plist")"; \
-		echo "Bundle version: $$version (expected $(VERSION))"; \
-		test "$$version" = "$(VERSION)" || { \
-			echo "error: the bundle reports $$version, but $(VERSION) was expected."; \
+	@set -e; \
+	for bundle in $(BUNDLES); do \
+		test -d "$$bundle" || { \
+			echo "error: $$bundle is missing. Run make app first."; \
 			exit 1; \
 		}; \
-	else \
-		echo "Bundle version: $$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$(APP_BUNDLE)/Contents/Info.plist") (no VERSION given)"; \
+		test -x "$$bundle/Contents/Helpers/kbpulse" || { \
+			echo "error: the kbpulse CLI is not embedded in $$bundle."; \
+			exit 1; \
+		}; \
+		case "$$bundle" in \
+			*$(ARCH_ARM).app) arch=$(ARCH_ARM) ;; \
+			*$(ARCH_INTEL).app) arch=$(ARCH_INTEL) ;; \
+			*) \
+				echo "error: the name of $$bundle does not carry the architecture."; \
+				exit 1; \
+				;; \
+		esac; \
+		echo "Bundle: $$bundle ($$arch)"; \
+		for binary in "$$bundle/Contents/MacOS/$(APP_NAME)" "$$bundle/Contents/Helpers/kbpulse"; do \
+			archs="$$(lipo -archs "$$binary")"; \
+			test "$$archs" = "$$arch" || { \
+				echo "error: $$binary carries $$archs, but $$arch was expected."; \
+				exit 1; \
+			}; \
+			echo "Architecture: $$archs in $$binary"; \
+		done; \
+		if [ -n "$(strip $(VERSION))" ]; then \
+			version="$$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$$bundle/Contents/Info.plist")"; \
+			echo "Bundle version: $$version (expected $(VERSION))"; \
+			test "$$version" = "$(VERSION)" || { \
+				echo "error: the bundle reports $$version, but $(VERSION) was expected."; \
+				exit 1; \
+			}; \
+		else \
+			echo "Bundle version: $$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$$bundle/Contents/Info.plist") (no VERSION given)"; \
+		fi; \
+		codesign --verify --deep --strict "$$bundle"; \
+		echo "Verified $$bundle."; \
+	done
+
+## install — copy the bundle of this machine into /Applications
+
+install: $(HOST_APP_TARGET)
+	@if [ -z "$(strip $(HOST_BUNDLE))" ]; then \
+		echo "error: no bundle for the host architecture $(HOST_ARCH)."; \
+		exit 1; \
 	fi
-	codesign --verify --deep --strict "$(APP_BUNDLE)"
-	@echo "Verified $(APP_BUNDLE)."
-
-## install — copy the bundle into /Applications
-
-install: app
 	@mkdir -p "$(INSTALL_DIR)"
 	@rm -rf "$(INSTALL_APP)"
-	ditto "$(APP_BUNDLE)" "$(INSTALL_APP)"
+	ditto "$(HOST_BUNDLE)" "$(INSTALL_APP)"
 	@echo "Installed $(INSTALL_APP)"
 
 ## run — install the bundle and launch it
@@ -123,21 +184,32 @@ install: app
 run: install
 	open "$(INSTALL_APP)"
 
-## dmg — the disk image
+## dmg — both disk images
 
-dmg:
+dmg: dmg-arm dmg-intel
+
+## dmg-arm — the Apple silicon disk image
+
+dmg-arm:
 	MARKETING_VERSION="$(VERSION)" CURRENT_PROJECT_VERSION="$(BUILD_NUMBER)" \
-		./build-dmg.sh dmg "$(CONFIGURATION)"
+		./build-dmg.sh dmg $(ARCH_ARM) "$(CONFIGURATION)"
 
-## release-artifacts — the versioned DMG and its checksum
+## dmg-intel — the Intel disk image
+
+dmg-intel:
+	MARKETING_VERSION="$(VERSION)" CURRENT_PROJECT_VERSION="$(BUILD_NUMBER)" \
+		./build-dmg.sh dmg $(ARCH_INTEL) "$(CONFIGURATION)"
+
+## release-artifacts — the versioned disk images and their checksums
 
 release-artifacts: _require_version dmg
 	@mkdir -p "$(RELEASE_DIR)"
-	cp "$(BUILD_DIR)/$(APP_NAME).dmg" "$(RELEASE_DIR)/$(APP_NAME)-$(VERSION).dmg"
-	@cd "$(RELEASE_DIR)" && shasum -a 256 "$(APP_NAME)-$(VERSION).dmg" > "$(APP_NAME)-$(VERSION).dmg.sha256"
-	@cd "$(RELEASE_DIR)" && shasum -a 256 -c "$(APP_NAME)-$(VERSION).dmg.sha256"
-	@echo "$(RELEASE_DIR)/$(APP_NAME)-$(VERSION).dmg.sha256:"
-	@cat "$(RELEASE_DIR)/$(APP_NAME)-$(VERSION).dmg.sha256"
+	cp "$(DMG_ARM)" "$(RELEASE_DIR)/$(APP_NAME)-$(VERSION)-$(ARCH_ARM).dmg"
+	cp "$(DMG_INTEL)" "$(RELEASE_DIR)/$(APP_NAME)-$(VERSION)-$(ARCH_INTEL).dmg"
+	@cd "$(RELEASE_DIR)" && shasum -a 256 "$(APP_NAME)-$(VERSION)-$(ARCH_ARM).dmg" "$(APP_NAME)-$(VERSION)-$(ARCH_INTEL).dmg" > checksums.txt
+	@cd "$(RELEASE_DIR)" && shasum -a 256 -c checksums.txt
+	@echo "$(RELEASE_DIR)/checksums.txt:"
+	@cat "$(RELEASE_DIR)/checksums.txt"
 
 ## release-notes — print the changelog section of a version
 

@@ -18,9 +18,13 @@ make run
 ```
 
 `make run` builds the app and the embedded `kbpulse` CLI, signs the bundle
-ad-hoc, installs it into `/Applications` and launches it. `make test` runs the
-test suite, `make verify` checks the bundle and the embedded CLI, and
-`make app` writes `build/KBPulse.app`.
+ad-hoc, installs the bundle of this machine into `/Applications` and launches
+it. `make test` runs the test suite, `make verify` checks both bundles and
+their embedded CLIs, and `make app` writes `build/KBPulse-arm64.app` and
+`build/KBPulse-x86_64.app`.
+
+KBPulse ships one bundle per architecture: `arm64` for Apple silicon and
+`x86_64` for Intel. `make app-arm` and `make app-intel` build one of them.
 
 ## Building
 The private header files are already included for you. You can also open
@@ -54,8 +58,12 @@ git push origin main v1.2.3
 `make release` moves `[Unreleased]` in `CHANGELOG.md` to the version, runs the
 tests, builds and verifies the artifacts, commits the bump and creates the
 annotated tag. It never pushes. Pushing the tag starts
-`.github/workflows/release.yml`, which publishes `KBPulse-<version>.dmg` and
-its `.sha256` sidecar. Builds are ad-hoc signed and not notarized.
+`.github/workflows/release.yml`, which publishes
+`KBPulse-<version>-arm64.dmg`, `KBPulse-<version>-x86_64.dmg` and
+`checksums.txt`. Builds are ad-hoc signed and not notarized.
+
+`checksums.txt` holds one line per disk image, in the shape that
+`shasum -a 256 -c checksums.txt` verifies.
 
 This checkout's `origin` is the upstream repository, which is not where a fork
 publishes. Add your fork as a remote and name it on the release:

@@ -34,8 +34,8 @@ jobs:
       - name: Test
         run: make test
 
-      - name: Package the app
+      - name: Package both architectures
         run: make app
 
-      - name: Verify the bundle
+      - name: Verify both bundles
         run: make verify

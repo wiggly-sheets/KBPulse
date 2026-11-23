@@ -52,7 +52,7 @@ jobs:
           VERSION: ${{ steps.version.outputs.version }}
         run: make release-artifacts VERSION="$VERSION"
 
-      - name: Verify the bundle
+      - name: Verify both bundles
         env:
           VERSION: ${{ steps.version.outputs.version }}
         run: make verify VERSION="$VERSION"
@@ -68,7 +68,7 @@ jobs:
             echo "## Checksums"
             echo ""
             echo '```'
-            cat release/*.sha256
+            cat release/checksums.txt
             echo '```'
           } >> release-notes.md
 
@@ -80,6 +80,7 @@ jobs:
           body_path: release-notes.md
           prerelease: ${{ contains(github.ref_name, '-') }}
           files: |
-            release/*.dmg
-            release/*.sha256
+            release/KBPulse-${{ steps.version.outputs.version }}-arm64.dmg
+            release/KBPulse-${{ steps.version.outputs.version }}-x86_64.dmg
+            release/checksums.txt
           fail_on_unmatched_files: true
