@@ -25,10 +25,12 @@ NS_ASSUME_NONNULL_BEGIN
 -(NSArray *)animationArray;
 
 -(id)initWithFileURL:(NSURL *)filePath;
+-(instancetype)initWithDictionary:(NSDictionary *)dictionary;
 -(void)writeToFileURL:(NSURL *)filePath;
 
 +(KBPProfile *)yawnProfile;
 +(void)createYawnJSON;
++(void)createYawnJSONInDirectory:(NSURL *)directory;
 
 // profile implementation
 

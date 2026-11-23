@@ -19,17 +19,24 @@
 }
 
 -(id)initWithFileURL:(NSURL *)filePath {
+    NSData * data = [NSData dataWithContentsOfURL:filePath];
+    NSDictionary * profile = data ? [NSJSONSerialization JSONObjectWithData:data options:NSJSONReadingMutableLeaves error:nil] : nil;
+    return [self initWithDictionary:[profile isKindOfClass:NSDictionary.class] ? profile : @{}];
+}
+
+-(instancetype)initWithDictionary:(NSDictionary *)profile {
     self = [super init];
     if (self) {
-        NSDictionary * profile = [NSJSONSerialization JSONObjectWithData:[NSData dataWithContentsOfURL:filePath] options:NSJSONReadingMutableLeaves error:nil];
-        _name = profile[@"Name"] ?: @"";
-        _versionNumber = profile[@"Version"] ?: @"";
-        _comment = profile[@"Description"] ?: @"";
-        _author = profile[@"Author"] ?: @"";
-        _homepage = profile[@"Homepage"] ?: @"";
-        _previewImageURL = profile[@"Preview Image URL"] ?: @"";
+        _name = [profile[@"Name"] isKindOfClass:NSString.class] ? profile[@"Name"] : @"";
+        _versionNumber = [profile[@"Version"] isKindOfClass:NSString.class] ? profile[@"Version"] : @"";
+        _comment = [profile[@"Description"] isKindOfClass:NSString.class] ? profile[@"Description"] : @"";
+        _author = [profile[@"Author"] isKindOfClass:NSString.class] ? profile[@"Author"] : @"";
+        _homepage = [profile[@"Homepage"] isKindOfClass:NSString.class] ? profile[@"Homepage"] : @"";
+        _previewImageURL = [profile[@"Preview Image URL"] isKindOfClass:NSString.class] ? profile[@"Preview Image URL"] : @"";
         NSMutableArray * animationArray = [NSMutableArray new];
-        for (NSDictionary * animation in profile[@"Animations"]) {
+        NSArray * animations = [profile[@"Animations"] isKindOfClass:NSArray.class] ? profile[@"Animations"] : @[];
+        for (NSDictionary * animation in animations) {
+            if (![animation isKindOfClass:NSDictionary.class]) continue;
             [animationArray addObject:[[KBPAnimation alloc] initWithDictionary:animation]];
         }
         _animations = animationArray;
@@ -79,6 +86,10 @@
 
 +(void)createYawnJSON {
     NSURL * directory = [[NSFileManager.defaultManager URLsForDirectory:NSDocumentDirectory inDomains:NSUserDomainMask][0] URLByAppendingPathComponent:@"/KBPulse/"];
+    [self createYawnJSONInDirectory:directory];
+}
+
++(void)createYawnJSONInDirectory:(NSURL *)directory {
     NSURL * file = [directory URLByAppendingPathComponent:@"Yawn.json"];
     // Never overwrite a user's edited Yawn theme. The CLI used to call this
     // unconditionally, wiping customizations on every invocation.

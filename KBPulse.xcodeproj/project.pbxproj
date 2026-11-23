@@ -13,6 +13,11 @@
 		4F9B00000000000000000004 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F9B0000000000000000000E /* SettingsView.swift */; };
 		4F9B00000000000000000005 /* HookStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F9B0000000000000000000F /* HookStore.swift */; };
 		4F9B0000000000000000001F /* ThemeStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F9B0000000000000000001C /* ThemeStore.swift */; };
+		4F9B00000000000000000040 /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F9B00000000000000000041 /* Theme.swift */; };
+		4F9B00000000000000000052 /* ThemeLibrary.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F9B00000000000000000051 /* ThemeLibrary.swift */; };
+		4F9B00000000000000000054 /* ThemeEditorSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F9B00000000000000000053 /* ThemeEditorSession.swift */; };
+		4F9B00000000000000000056 /* PreviewSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F9B00000000000000000055 /* PreviewSession.swift */; };
+		4F9B00000000000000000058 /* ThemeTimeline.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F9B00000000000000000057 /* ThemeTimeline.swift */; };
 		4F9B00000000000000000020 /* ReactiveEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F9B0000000000000000001D /* ReactiveEngine.swift */; };
 		4F9B00000000000000000021 /* ThemeEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F9B0000000000000000001E /* ThemeEditorView.swift */; };
 		4F9B00000000000000000006 /* KBPAnimator.m in Sources */ = {isa = PBXBuildFile; fileRef = 4FF354DC2720DAC400F7F65E /* KBPAnimator.m */; };
@@ -355,6 +360,11 @@
 				4F9B00000000000000000004 /* SettingsView.swift in Sources */,
 				4F9B00000000000000000005 /* HookStore.swift in Sources */,
 				4F9B0000000000000000001F /* ThemeStore.swift in Sources */,
+				4F9B00000000000000000040 /* Theme.swift in Sources */,
+				4F9B00000000000000000052 /* ThemeLibrary.swift in Sources */,
+				4F9B00000000000000000054 /* ThemeEditorSession.swift in Sources */,
+				4F9B00000000000000000056 /* PreviewSession.swift in Sources */,
+				4F9B00000000000000000058 /* ThemeTimeline.swift in Sources */,
 				4F9B00000000000000000020 /* ReactiveEngine.swift in Sources */,
 				4F9B00000000000000000021 /* ThemeEditorView.swift in Sources */,
 				4F9B00000000000000000030 /* GlassSupport.swift in Sources */,

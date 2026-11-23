@@ -182,12 +182,21 @@ final class Engine {
                 }
             }
             guard profile.animations.count > 0 else { return }
+            var playback: [KBPAnimation] = []
             for case let animation as KBPAnimation in profile.animations {
+                playback.append(animation)
+            }
+            let timeline = ThemeTimeline(
+                brightness: playback.map { Double($0.brightness.floatValue) },
+                fadeDurations: playback.map { $0.fadeDuration.doubleValue },
+                delays: playback.map { $0.delay.doubleValue }
+            )
+            for step in timeline.steps {
                 guard isCurrent(id) else { return }
-                let brightness = Float(min(1, max(0, animation.brightness.floatValue)))
-                let fade = Int32(max(0, animation.fadeDuration.intValue))
+                let brightness = Float(min(1, max(0, step.brightness)))
+                let fade = Int32(max(0, step.fadeDuration.rounded()))
                 KBPAnimator.setBrightness(brightness, withDuration: fade)
-                sleepChunks(max(animation.totalDuration().doubleValue / 1000, 0.05), id: id)
+                sleepChunks(max((step.fadeDuration + step.delay) / 1000, 0.05), id: id)
             }
         }
     }

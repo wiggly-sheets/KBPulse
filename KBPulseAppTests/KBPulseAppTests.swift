@@ -359,16 +359,200 @@ final class KBPulseAppTests: XCTestCase {
         ]))
     }
 
-    func testReactiveModeClampsValues() {
-        let mode = ReactiveMode(section: [
-            "Bump": 4.0,
-            "Floor": -1.0,
-            "Decay Duration": -50,
-            "Space Bump": 3.0,
+    func testReactiveModeKeepsValuesForValidation() {
+        let theme = Theme(dictionary: [
+            "Name": "Bad Reactive",
+            "Reactive": [
+                "Bump": 4.0,
+                "Floor": -1.0,
+                "Decay Duration": -50,
+                "Space Bump": 3.0,
+            ],
         ])
-        XCTAssertEqual(mode.bump, 1.0)
-        XCTAssertEqual(mode.floor, 0.0)
-        XCTAssertEqual(mode.decay, 0)
-        XCTAssertEqual(mode.spaceBump, 1.0)
+        XCTAssertEqual(theme.reactive?.bump, 4.0)
+        XCTAssertEqual(theme.reactive?.floor, -1.0)
+        XCTAssertEqual(theme.reactive?.decay, -50)
+        XCTAssertEqual(theme.reactive?.spaceBump, 3.0)
+        XCTAssertFalse(theme.validate().isEmpty)
+    }
+
+    func testThemePreservesUnknownKeysAndFractionalDurations() throws {
+        let theme = Theme(dictionary: [
+            "Name": "Test",
+            "Custom": ["nested": true],
+            "Animations": [[
+                "Name": "Fade",
+                "Brightness": 1,
+                "Fade Duration": 1000.5,
+                "Delay": 0.25,
+                "Animation Extra": "kept",
+            ]],
+        ])
+        XCTAssertEqual(theme.animations.first?.fadeDuration, 1000.5)
+        XCTAssertEqual(theme.animations.first?.delay, 0.25)
+        let roundTrip = Theme(dictionary: theme.dictionary())
+        XCTAssertEqual(roundTrip.unknown["Custom"] as? [String: Bool], ["nested": true])
+        XCTAssertEqual(roundTrip.animations.first?.unknown["Animation Extra"] as? String, "kept")
+        XCTAssertEqual(roundTrip.animations.first?.fadeDuration, 1000.5)
+    }
+
+    func testThemeValidationRequiresAnimationNamesAndValidURLs() {
+        let theme = Theme(dictionary: [
+            "Name": "Test",
+            "Homepage": "example.com",
+            "Animations": [["Brightness": 1, "Fade Duration": 100, "Delay": 0]],
+        ])
+        let issues = theme.validate()
+        XCTAssertTrue(issues.contains { $0.path == "Homepage" })
+        XCTAssertTrue(issues.contains { $0.path == "Animations[0]" })
+    }
+
+    // MARK: - Theme editor session
+
+    private func makeThemeDirectory() throws -> URL {
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("KBPulseTests-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        try ThemeStore.write(Theme.defaultYawn, to: dir.appendingPathComponent("Yawn.json"))
+        var second = Theme.defaultYawn
+        second.name = "Second"
+        try ThemeStore.write(second, to: dir.appendingPathComponent("Second.json"))
+        return dir
+    }
+
+    func testEditorSessionDirtyStateUsesSavedSnapshot() throws {
+        let dir = try makeThemeDirectory()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let session = ThemeEditorSession(library: ThemeLibrary(root: dir))
+
+        session.activate(initial: "Yawn")
+        XCTAssertEqual(session.selection, "Yawn")
+        XCTAssertFalse(session.isDirty)
+
+        session.theme.name = "Changed"
+        XCTAssertTrue(session.isDirty)
+
+        session.save()
+        XCTAssertFalse(session.isDirty)
+        XCTAssertEqual(try ThemeStore.loadTheme(at: dir.appendingPathComponent("Yawn.json")).name,
+                       "Changed")
+    }
+
+    func testEditorSessionBlocksSelectionUntilDiscarded() throws {
+        let dir = try makeThemeDirectory()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let session = ThemeEditorSession(library: ThemeLibrary(root: dir))
+
+        session.activate(initial: "Yawn")
+        session.theme.name = "Changed"
+        session.requestSelection("Second")
+
+        XCTAssertEqual(session.selection, "Yawn")
+        XCTAssertEqual(session.pendingSelection, "Second")
+
+        session.discardPending()
+        XCTAssertEqual(session.selection, "Second")
+        XCTAssertNil(session.pendingSelection)
+        XCTAssertFalse(session.isDirty)
+    }
+
+    func testEditorSessionCreatesAndSelectsNewTheme() throws {
+        let dir = try makeThemeDirectory()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let session = ThemeEditorSession(library: ThemeLibrary(root: dir))
+
+        session.activate(initial: "Yawn")
+        session.create(named: "Fresh")
+
+        XCTAssertEqual(session.selection, "Fresh")
+        XCTAssertFalse(session.isDirty)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: dir.appendingPathComponent("Fresh.json").path))
+        XCTAssertEqual(session.themes, ["Fresh", "Second", "Yawn"])
+    }
+
+    // MARK: - Preview session
+
+    func testPreviewSessionPlaysInMemoryAndRestores() {
+        let player = FakePreviewPlayer()
+        var restores = 0
+        let session = PreviewSession(player: player, restore: { restores += 1 })
+        let expectation = expectation(description: "preview finished")
+
+        session.play(theme: .defaultYawn, duration: 0.01)
+        XCTAssertEqual(player.playCount, 1)
+        XCTAssertEqual(session.state, .playing(themeName: "Yawn (default)"))
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+            expectation.fulfill()
+        }
+        wait(for: [expectation], timeout: 1)
+
+        XCTAssertEqual(player.stops, 1)
+        XCTAssertEqual(restores, 1)
+        XCTAssertEqual(session.state, .idle)
+    }
+
+    func testPreviewSessionCancelRestoresImmediately() {
+        let player = FakePreviewPlayer()
+        var restores = 0
+        let session = PreviewSession(player: player, restore: { restores += 1 })
+
+        session.play(theme: .defaultYawn, duration: 10)
+        session.cancel()
+
+        XCTAssertEqual(player.stops, 1)
+        XCTAssertEqual(restores, 1)
+        XCTAssertEqual(session.state, .idle)
+    }
+
+    func testPreviewSessionRejectsInvalidTheme() {
+        let player = FakePreviewPlayer()
+        let session = PreviewSession(player: player, restore: {})
+
+        var theme = Theme.defaultYawn
+        theme.name = ""
+        session.play(theme: theme)
+
+        XCTAssertEqual(player.playCount, 0)
+        guard case .failed = session.state else {
+            return XCTFail("Expected failed state")
+        }
+    }
+
+    func testTimelineFadesThenHolds() {
+        let timeline = ThemeTimeline(animations: [
+            Theme.Animation(name: "In", brightness: 1, fadeDuration: 100, delay: 50),
+            Theme.Animation(name: "Out", brightness: 0, fadeDuration: 200, delay: 0),
+        ])
+
+        XCTAssertEqual(timeline.duration, 350)
+        XCTAssertEqual(timeline.brightness(at: 0), 0)
+        XCTAssertEqual(timeline.brightness(at: 50), 0.5)
+        XCTAssertEqual(timeline.brightness(at: 100), 1)
+        XCTAssertEqual(timeline.brightness(at: 150), 1)
+        XCTAssertEqual(timeline.brightness(at: 250), 0.5)
+        XCTAssertEqual(timeline.brightness(at: 350), 0)
+    }
+
+    func testTimelineKeepsFractionalDurations() {
+        let timeline = ThemeTimeline(animations: [
+            Theme.Animation(name: "Slow", brightness: 1, fadeDuration: 1000.5, delay: 0.25),
+        ])
+
+        XCTAssertEqual(timeline.duration, 1000.75)
+        XCTAssertEqual(timeline.steps.first?.fadeDuration, 1000.5)
+    }
+}
+
+private final class FakePreviewPlayer: PreviewPlayer {
+    var playCount = 0
+    var stops = 0
+
+    func play(theme: Theme, reactive: ReactiveMode?) {
+        playCount += 1
+    }
+
+    func stop() {
+        stops += 1
     }
 }

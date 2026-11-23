@@ -80,19 +80,13 @@ final class AppState: ObservableObject {
     private var overrides: [String: String] = [:]
     private var overrideOrder: [String] = []
 
-    /// Active temporary theme preview (see `previewTheme`). The temp file is
-    /// deleted when the preview ends.
-    private var previewWorkItem: DispatchWorkItem?
-    private var previewTempURL: URL?
-    private var previewPreviousTheme = ""
-    private var previewEngineWasOn = false
+    /// Active temporary theme preview. Owns engine takeover and restoration.
+    private(set) lazy var preview = PreviewSession(
+        player: EnginePreviewPlayer(engine: engine),
+        restore: { [weak self] in self?.restorePreviewedTheme() }
+    )
 
-    static let themesDir: URL = {
-        guard let dir = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first else {
-            return URL(fileURLWithPath: NSHomeDirectory())
-        }
-        return dir.appendingPathComponent("KBPulse", isDirectory: true)
-    }()
+    static let themesDir = ThemeLocations.themesDir
 
     init() {
         KBPPulseManager.loadPrivateFrameworks()
@@ -120,7 +114,7 @@ final class AppState: ObservableObject {
         try? FileManager.default.createDirectory(at: Self.themesDir, withIntermediateDirectories: true)
         HookStore.ensureFile()
         if !FileManager.default.fileExists(atPath: Self.themesDir.appendingPathComponent("Yawn.json").path) {
-            KBPProfile.createYawnJSON()
+            ThemeStore.createDefaultYawnIfMissing()
         }
         ThemeStore.createReactiveExampleIfMissing()
         let defaults = UserDefaults.standard
@@ -301,8 +295,6 @@ final class AppState: ObservableObject {
     }
 
     private func startEngine(for requestedTheme: String? = nil) {
-        // Any real engine switch supersedes a temporary preview.
-        discardPreviewBookkeeping()
         let theme = requestedTheme ?? effectiveTheme
         guard !theme.isEmpty else { return }
         let url = Self.themesDir.appendingPathComponent("\(theme).json")
@@ -313,62 +305,29 @@ final class AppState: ObservableObject {
 
     // MARK: - Temporary theme preview
 
-    /// Plays a theme file for `duration` seconds without changing the persisted
-    /// selection, then restores whatever was playing before. The file is
-    /// deleted when the preview ends.
-    func previewTheme(fileURL: URL, reactive: ReactiveMode?, duration: TimeInterval = 10) {
-        stopPreview()
-        previewTempURL = fileURL
-        previewPreviousTheme = effectiveTheme
-        previewEngineWasOn = engineOn
-        engine.stop()
-        engine.start(profile: KBPProfile(fileURL: fileURL), reactive: reactive)
-        let item = DispatchWorkItem { [weak self] in
-            self?.finishPreview(restore: true)
-        }
-        previewWorkItem = item
-        DispatchQueue.main.asyncAfter(deadline: .now() + duration, execute: item)
+    /// Plays the current editor contents without changing the persisted
+    /// selection, then restores whatever was playing before.
+    func previewTheme(_ theme: Theme) {
+        preview.play(theme: theme)
     }
 
     /// Ends a preview and returns to the previous state.
     func cancelPreview() {
-        finishPreview(restore: true)
+        preview.cancel()
     }
 
     /// Ends a preview without restoring (used when another action already
     /// takes ownership of the engine).
     func stopPreview() {
-        finishPreview(restore: false)
+        preview.stop()
     }
 
-    private func finishPreview(restore: Bool) {
-        guard let temp = previewTempURL else { return }
-        let shouldRestore = restore && previewEngineWasOn && !previewPreviousTheme.isEmpty
-        let previousTheme = previewPreviousTheme
-        previewTempURL = nil
-        previewWorkItem?.cancel()
-        previewWorkItem = nil
-        previewPreviousTheme = ""
-        previewEngineWasOn = false
-        try? FileManager.default.removeItem(at: temp)
-        if shouldRestore {
-            startEngine(for: previousTheme)
+    private func restorePreviewedTheme() {
+        if engineOn {
+            startEngine()
         } else {
             engine.stop()
         }
-    }
-
-    /// Forgets a preview without stopping the engine. Used when a new engine
-    /// start has already replaced the previewed theme.
-    private func discardPreviewBookkeeping() {
-        previewWorkItem?.cancel()
-        previewWorkItem = nil
-        if let temp = previewTempURL {
-            try? FileManager.default.removeItem(at: temp)
-        }
-        previewTempURL = nil
-        previewPreviousTheme = ""
-        previewEngineWasOn = false
     }
 
     private func updateOverrideTheme() {
