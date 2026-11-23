@@ -70,6 +70,10 @@ build:
 ## test — the changelog check and the Xcode suite
 
 test:
+	@if pgrep -x "$(APP_NAME)" >/dev/null; then \
+		echo "error: quit $(APP_NAME) before running tests; the test host uses the same bundle identifier."; \
+		exit 1; \
+	fi
 	./scripts/changelog.sh check
 	xcodebuild test -project "$(PROJECT)" -scheme "$(TEST_SCHEME)" \
 		-destination 'platform=macOS' \
