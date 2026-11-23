@@ -29,8 +29,12 @@ final class ThemeEditorSession: ObservableObject {
         self.onFilesChanged = onFilesChanged
     }
 
+    var validationIssues: [ThemeIssue] {
+        theme.validate()
+    }
+
     var validationError: String? {
-        theme.validate().first?.description
+        validationIssues.first?.description
     }
 
     /// Compares the document with the last loaded or saved snapshot. An empty

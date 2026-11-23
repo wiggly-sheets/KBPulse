@@ -47,16 +47,14 @@ struct SettingsView: View {
         TabView {
             general
                 .tabItem { Label("General", systemImage: "gearshape") }
-            ScrollView {
-                ThemesTab(state: state)
-            }
-            .tabItem { Label("Themes", systemImage: "paintpalette") }
+            ThemesTab(state: state)
+                .tabItem { Label("Themes", systemImage: "paintpalette") }
             ScrollView {
                 HooksTab(state: state)
             }
             .tabItem { Label("Hooks", systemImage: "bolt") }
         }
-        .frame(width: 640)
+        .frame(minWidth: 820, minHeight: 600)
     }
 
     private var general: some View {

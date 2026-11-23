@@ -19,7 +19,6 @@ struct ThemesTab: View {
     @State private var showNew = false
     @State private var showDuplicate = false
     @State private var showDelete = false
-    @State private var showBrightnessCurve = false
 
     init(state: AppState) {
         self.state = state
@@ -32,207 +31,13 @@ struct ThemesTab: View {
     }
 
     var body: some View {
-        Form {
-            Section {
-                ThemeIdentityCard(theme: session.theme)
-            }
-            Section("Theme file") {
-                Picker("File", selection: Binding(
-                    get: { session.selection },
-                    set: { session.requestSelection($0) }
-                )) {
-                    ForEach(session.themes, id: \.self) { Text($0).tag($0) }
-                }
-                HStack {
-                    TextField("New theme name", text: $newName)
-                        .lineLimit(nil)
-                    Button("New…") { showNew = true }
-                        .disabled(newName.trimmingCharacters(in: .whitespaces).isEmpty)
-                        .kbGlassButtonStyle()
-                    Button("Duplicate") { showDuplicate = true }
-                        .disabled(session.selection.isEmpty || newName.trimmingCharacters(in: .whitespaces).isEmpty)
-                        .kbGlassButtonStyle()
-                }
-                HStack {
-                    Button("Import…") { importPanel() }
-                        .kbGlassButtonStyle()
-                    Button("Export…") { exportPanel() }.disabled(session.selection.isEmpty)
-                        .kbGlassButtonStyle()
-                    Button("Delete…") { showDelete = true }
-                        .disabled(session.selection.isEmpty)
-                        .kbGlassButtonStyle()
-                    Spacer()
-                    Button("Save") { save() }.disabled(session.selection.isEmpty)
-                        .kbGlassButtonStyle(prominent: true)
-                }
-            }
-            Section("Details") {
-                TextField("Name", text: $session.theme.name)
-                TextField("Description", text: $session.theme.comment, axis: .vertical)
-                    .lineLimit(3...8)
-                TextField("Author", text: $session.theme.author)
-                TextField("Version", text: $session.theme.version)
-                TextField("Homepage", text: $session.theme.homepage)
-                TextField("Preview Image URL", text: $session.theme.previewImageURL)
-            }
-            Section("Animations") {
-                if session.theme.animations.isEmpty {
-                    Text("This theme has no animations.")
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                ForEach(Array(session.theme.animations.enumerated()), id: \.element.id) { index, _ in
-                    VStack(alignment: .leading, spacing: 8) {
-                        HStack {
-                            TextField("Animation name", text: $session.theme.animations[index].name)
-                                .font(.headline)
-                                .lineLimit(nil)
-                            Spacer()
-                            Button {
-                                moveAnimation(index, by: -1)
-                            } label: {
-                                Image(systemName: "arrow.up")
-                            }
-                            .buttonStyle(.borderless)
-                            .disabled(index == 0)
-                            .help("Move animation up")
-                            Button {
-                                moveAnimation(index, by: 1)
-                            } label: {
-                                Image(systemName: "arrow.down")
-                            }
-                            .buttonStyle(.borderless)
-                            .disabled(index == session.theme.animations.count - 1)
-                            .help("Move animation down")
-                            Button(role: .destructive) {
-                                session.theme.animations.remove(at: index)
-                            } label: {
-                                Image(systemName: "trash")
-                            }
-                            .buttonStyle(.borderless)
-                            .help("Delete animation")
-                        }
-                        TextField("Description", text: $session.theme.animations[index].comment, axis: .vertical)
-                            .lineLimit(2...5)
-                        doubleField("Brightness (0-1)", $session.theme.animations[index].brightness)
-                        doubleField("Fade Duration (ms)", $session.theme.animations[index].fadeDuration)
-                        doubleField("Delay (ms)", $session.theme.animations[index].delay)
-                    }
-                    .padding(.vertical, 4)
-                    .padding(.horizontal, 8)
-                    .kbGlassSurface(cornerRadius: 10)
-                }
-                Button("Add animation") {
-                    session.theme.animations.append(Theme.Animation(
-                        name: "New Animation", comment: "", brightness: 0.5,
-                        fadeDuration: 500, delay: 0
-                    ))
-                }
-                .kbGlassButtonStyle()
-                .help("Adds a new animation to the end of the list")
-            }
-            Section("Live Preview") {
-                VStack(alignment: .leading, spacing: 8) {
-                    HStack {
-                        Button(previewButtonTitle) { previewTheme() }
-                            .disabled(session.selection.isEmpty
-                                      || session.validationError != nil
-                                      || isPreviewing)
-                            .kbGlassButtonStyle()
-                        Button("Show brightness curve") { showBrightnessCurve.toggle() }
-                            .kbGlassButtonStyle()
-                    }
-                    if isPreviewing {
-                        HStack(spacing: 8) {
-                            ProgressView()
-                                .controlSize(.small)
-                            Text("Playing preview…")
-                                .font(.footnote)
-                                .foregroundStyle(.secondary)
-                            Spacer()
-                            Button("Cancel") { state.cancelPreview() }
-                                .kbGlassButtonStyle()
-                        }
-                    }
-                    if case .failed(let message) = preview.state {
-                        Text(message)
-                            .font(.footnote)
-                            .foregroundStyle(.red)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                    if showBrightnessCurve {
-                        if session.theme.reactive?.enabled == true && session.theme.animations.isEmpty {
-                            Text("Reactive themes have no fixed timeline.")
-                                .font(.footnote)
-                                .foregroundStyle(.secondary)
-                        } else {
-                            BrightnessCurveView(animations: session.theme.animations)
-                                .frame(height: 150)
-                                .padding(.vertical, 8)
-                        }
-                    }
-                    Text("Plays the current editor contents, including unsaved edits, then returns to the selected theme. Animation themes play their full timeline; reactive themes play for 10 seconds.")
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-            }
-            Section("Typing reactions") {
-                Toggle("Typing reactions", isOn: Binding(
-                    get: { session.theme.reactive != nil },
-                    set: { enabled in
-                        session.theme.reactive = enabled
-                            ? (session.theme.reactive ?? ReactiveMode())
-                            : nil
-                    }
-                ))
-                if let reactive = Binding($session.theme.reactive) {
-                    Toggle("Enabled", isOn: reactive.enabled)
-                    doubleField("Bump (0-1)", reactive.bump)
-                    doubleField("Decay Duration (ms)", reactive.decay)
-                    doubleField("Resting brightness (0-1)", reactive.floor)
-                    doubleField("Space bump (0-1)", reactive.spaceBump)
-                    doubleField("Enter bump (0-1)", reactive.enterBump)
-                    doubleField("Modifier bump (0-1)", reactive.modifierBump)
-                    Text("While enabled, this theme reacts to keystrokes instead of running its animation loop.")
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                } else {
-                    Text("Reacts to keystrokes instead of running the animation loop. Save removes this section when toggled off.")
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-            }
-            if session.theme.reactive != nil {
-                Section("Accessibility permission") {
-                    HStack {
-                        Text("Keystroke access")
-                        Spacer()
-                        Text(state.isAccessibilityGranted ? "Granted" : "Required")
-                            .foregroundStyle(state.isAccessibilityGranted ? Color.secondary : Color.yellow)
-                    }
-                    if !state.isAccessibilityGranted {
-                        Button("Enable typing reactions") { openAccessibilitySettings() }
-                            .kbGlassButtonStyle()
-                        Text("Typing-reactive themes need Accessibility permission to observe keystrokes. Without it they rest at zero brightness.")
-                            .font(.footnote)
-                            .foregroundStyle(.secondary)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                }
-            }
-            // Validation status
-            if let validationError = session.validationError {
-                Section("Validation") {
-                    Text(validationError)
-                        .foregroundStyle(.red)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-            }
+        HSplitView {
+            sidebar
+                .frame(minWidth: 180, idealWidth: 200, maxWidth: 240)
+            detail
+                .frame(minWidth: 520, maxWidth: .infinity, maxHeight: .infinity)
         }
-        .formStyle(.grouped)
+        .frame(minWidth: 760, minHeight: 520)
         .onAppear {
             state.refreshThemes()
             session.activate(initial: state.selectedTheme)
@@ -281,19 +86,265 @@ struct ThemesTab: View {
         }
     }
 
-    // MARK: - Field helpers
+    // MARK: - Sidebar
 
-    private func doubleField(_ label: String, _ value: Binding<Double>) -> some View {
-        HStack {
-            Text(label)
-            Spacer()
-            TextField("0", value: value, format: .number.precision(.fractionLength(0...2)))
-                .frame(width: 90)
-                .multilineTextAlignment(.trailing)
+    private var sidebar: some View {
+        VStack(spacing: 0) {
+            if session.themes.isEmpty {
+                ContentUnavailableView(
+                    "No Themes",
+                    systemImage: "paintpalette",
+                    description: Text("Create or import a theme to start editing.")
+                )
+            } else {
+                List(selection: selectionBinding) {
+                    ForEach(session.themes, id: \.self) { name in
+                        HStack(spacing: 6) {
+                            Image(systemName: "paintpalette")
+                                .foregroundStyle(.secondary)
+                            Text(name)
+                                .lineLimit(1)
+                            Spacer(minLength: 4)
+                            if name == state.selectedTheme {
+                                Image(systemName: "keyboard")
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                                    .help("Active theme")
+                            }
+                            if name == session.selection && session.isDirty {
+                                Circle()
+                                    .fill(.orange)
+                                    .frame(width: 6, height: 6)
+                                    .help("Unsaved changes")
+                            }
+                        }
+                        .tag(name)
+                    }
+                }
+                .listStyle(.sidebar)
+            }
+            Divider()
+            HStack {
+                Menu {
+                    Button("New Theme…") { beginNew() }
+                    Button("Import Theme…") { importPanel() }
+                } label: {
+                    Label("Add Theme", systemImage: "plus")
+                }
+                .menuStyle(.borderlessButton)
+                Spacer()
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 8)
         }
     }
 
+    private var selectionBinding: Binding<String?> {
+        Binding(
+            get: { session.selection.isEmpty ? nil : session.selection },
+            set: { name in
+                guard let name, name != session.selection else { return }
+                session.requestSelection(name)
+            }
+        )
+    }
+
+    // MARK: - Detail
+
+    @ViewBuilder
+    private var detail: some View {
+        if session.selection.isEmpty {
+            ContentUnavailableView(
+                "Choose a Theme",
+                systemImage: "paintpalette",
+                description: Text("Select a theme in the sidebar, or add a new one.")
+            )
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else {
+            Form {
+                Section {
+                    ThemeIdentityCard(theme: session.theme)
+                }
+                Section("Details") {
+                    TextField("Name", text: $session.theme.name)
+                    TextField("Description", text: $session.theme.comment, axis: .vertical)
+                        .lineLimit(3...8)
+                    TextField("Author", text: $session.theme.author)
+                    TextField("Version", text: $session.theme.version)
+                    TextField("Homepage", text: $session.theme.homepage)
+                    TextField("Preview Image URL", text: $session.theme.previewImageURL)
+                }
+                Section("Animations") {
+                    if session.theme.animations.isEmpty {
+                        Text("This theme has no animations.")
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    ForEach(Array(session.theme.animations.enumerated()), id: \.element.id) { index, _ in
+                        AnimationEditorCard(
+                            animation: $session.theme.animations[index],
+                            canMoveUp: index > 0,
+                            canMoveDown: index < session.theme.animations.count - 1,
+                            onMoveUp: { moveAnimation(index, by: -1) },
+                            onMoveDown: { moveAnimation(index, by: 1) },
+                            onDelete: { session.theme.animations.remove(at: index) }
+                        )
+                    }
+                    Button("Add Animation") {
+                        session.theme.animations.append(Theme.Animation(
+                            name: "New Animation", comment: "", brightness: 0.5,
+                            fadeDuration: 500, delay: 0
+                        ))
+                    }
+                    .kbGlassButtonStyle()
+                    .help("Adds a new animation to the end of the list")
+                }
+                Section("Live Preview") {
+                    if isPreviewing {
+                        HStack(spacing: 8) {
+                            ProgressView()
+                                .controlSize(.small)
+                            Text("Playing preview…")
+                                .font(.footnote)
+                                .foregroundStyle(.secondary)
+                            Spacer()
+                            Button("Cancel") { state.cancelPreview() }
+                                .kbGlassButtonStyle()
+                        }
+                    }
+                    if case .failed(let message) = preview.state {
+                        Text(message)
+                            .font(.footnote)
+                            .foregroundStyle(.red)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    if session.theme.reactive?.enabled == true && session.theme.animations.isEmpty {
+                        Text("Reactive themes have no fixed timeline.")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    } else {
+                        BrightnessCurveView(animations: session.theme.animations)
+                            .frame(height: 150)
+                            .padding(.vertical, 4)
+                    }
+                    Text("Preview plays the current editor contents, including unsaved edits, then returns to the active theme. Animation themes play their full timeline; reactive themes play for 10 seconds.")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Section("Typing Reactions") {
+                    Toggle("Typing reactions", isOn: Binding(
+                        get: { session.theme.reactive != nil },
+                        set: { enabled in
+                            session.theme.reactive = enabled
+                                ? (session.theme.reactive ?? ReactiveMode())
+                                : nil
+                        }
+                    ))
+                    if let reactive = Binding($session.theme.reactive) {
+                        Toggle("Enabled", isOn: reactive.enabled)
+                        UnitSlider(label: "Bump", value: reactive.bump)
+                        UnitSlider(label: "Resting brightness", value: reactive.floor)
+                        MillisecondSlider(label: "Decay duration", value: reactive.decay)
+                        DisclosureGroup("Key amounts") {
+                            UnitSlider(label: "Space", value: reactive.spaceBump)
+                            UnitSlider(label: "Enter", value: reactive.enterBump)
+                            UnitSlider(label: "Modifier", value: reactive.modifierBump)
+                        }
+                        ReactionCurveView(reactive: reactive.wrappedValue)
+                        Text("While enabled, this theme reacts to keystrokes instead of running its animation loop.")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    } else {
+                        Text("Reacts to keystrokes instead of running the animation loop. Save removes this section when toggled off.")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+                if session.theme.reactive != nil {
+                    Section("Accessibility permission") {
+                        HStack {
+                            Text("Keystroke access")
+                            Spacer()
+                            Text(state.isAccessibilityGranted ? "Granted" : "Required")
+                                .foregroundStyle(state.isAccessibilityGranted ? Color.secondary : Color.yellow)
+                        }
+                        if !state.isAccessibilityGranted {
+                            Button("Enable typing reactions") { openAccessibilitySettings() }
+                                .kbGlassButtonStyle()
+                            Text("Typing-reactive themes need Accessibility permission to observe keystrokes. Without it they rest at zero brightness.")
+                                .font(.footnote)
+                                .foregroundStyle(.secondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
+                }
+                if !session.validationIssues.isEmpty {
+                    Section("Validation") {
+                        ForEach(Array(session.validationIssues.enumerated()), id: \.offset) { _, issue in
+                            Text(issue.description)
+                                .foregroundStyle(.red)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
+                }
+            }
+            .formStyle(.grouped)
+            .safeAreaInset(edge: .top, spacing: 0) { detailHeader }
+        }
+    }
+
+    private var detailHeader: some View {
+        HStack(spacing: 10) {
+            Text(session.selection)
+                .font(.headline)
+                .lineLimit(1)
+            if session.isDirty {
+                Text("Edited")
+                    .font(.caption)
+                    .foregroundStyle(.orange)
+            }
+            Spacer()
+            Button {
+                previewTheme()
+            } label: {
+                Label("Preview", systemImage: "play.fill")
+            }
+            .disabled(session.validationError != nil || isPreviewing)
+            .kbGlassButtonStyle()
+            Menu {
+                Button("Duplicate…") { beginDuplicate() }
+                Button("Export…") { exportPanel() }
+                Divider()
+                Button("Delete…", role: .destructive) { showDelete = true }
+            } label: {
+                Image(systemName: "ellipsis.circle")
+            }
+            .menuStyle(.borderlessButton)
+            .help("Theme actions")
+            Button("Save") { save() }
+                .disabled(!session.isDirty)
+                .keyboardShortcut("s", modifiers: .command)
+                .kbGlassButtonStyle(prominent: true)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
+        .background(.bar)
+    }
+
     // MARK: - Actions
+
+    private func beginNew() {
+        newName = ""
+        showNew = true
+    }
+
+    private func beginDuplicate() {
+        newName = "\(session.selection) Copy"
+        showDuplicate = true
+    }
 
     private func moveAnimation(_ index: Int, by offset: Int) {
         let target = index + offset
@@ -337,10 +388,6 @@ struct ThemesTab: View {
         return false
     }
 
-    private var previewButtonTitle: String {
-        session.theme.reactive?.enabled == true ? "Test this theme (10s)" : "Test this theme"
-    }
-
     private func previewTheme() {
         if let validationError = session.validationError {
             session.message = validationError
@@ -356,6 +403,194 @@ struct ThemesTab: View {
            let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility") {
             NSWorkspace.shared.open(url)
         }
+    }
+}
+
+private struct AnimationEditorCard: View {
+    @Binding var animation: Theme.Animation
+    let canMoveUp: Bool
+    let canMoveDown: Bool
+    let onMoveUp: () -> Void
+    let onMoveDown: () -> Void
+    let onDelete: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                TextField("", text: $animation.name, prompt: Text("Animation name"))
+                    .labelsHidden()
+                    .font(.headline)
+                    .lineLimit(1)
+                Spacer()
+                Button(action: onMoveUp) {
+                    Image(systemName: "arrow.up")
+                }
+                .buttonStyle(.borderless)
+                .disabled(!canMoveUp)
+                .help("Move animation up")
+                Button(action: onMoveDown) {
+                    Image(systemName: "arrow.down")
+                }
+                .buttonStyle(.borderless)
+                .disabled(!canMoveDown)
+                .help("Move animation down")
+                Button(role: .destructive, action: onDelete) {
+                    Image(systemName: "trash")
+                }
+                .buttonStyle(.borderless)
+                .help("Delete animation")
+            }
+            AnimationTimelineStrip(animation: animation)
+            TextField("Description", text: $animation.comment, axis: .vertical)
+                .lineLimit(2...4)
+            UnitSlider(label: "Brightness", value: $animation.brightness)
+            HStack(spacing: 16) {
+                MillisecondField(label: "Fade", value: $animation.fadeDuration)
+                MillisecondField(label: "Hold after fade", value: $animation.delay)
+            }
+        }
+        .padding(.vertical, 6)
+        .padding(.horizontal, 10)
+        .kbGlassSurface(cornerRadius: 10)
+    }
+}
+
+private struct UnitSlider: View {
+    let label: String
+    @Binding var value: Double
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            HStack {
+                Text(label)
+                Spacer()
+                Text("\(Int((value * 100).rounded()))%")
+                    .monospacedDigit()
+                    .foregroundStyle(.secondary)
+            }
+            Slider(value: $value, in: 0...1)
+        }
+    }
+}
+
+private struct MillisecondField: View {
+    let label: String
+    @Binding var value: Double
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(label)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            HStack(spacing: 6) {
+                TextField("", value: $value, format: .number.precision(.fractionLength(0...2)))
+                    .labelsHidden()
+                    .frame(width: 72)
+                    .multilineTextAlignment(.trailing)
+                Text("ms")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Stepper("", value: $value, in: 0...60000, step: 50)
+                    .labelsHidden()
+            }
+        }
+    }
+}
+
+private struct MillisecondSlider: View {
+    let label: String
+    @Binding var value: Double
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            HStack {
+                Text(label)
+                Spacer()
+                Text("\(Int(value.rounded())) ms")
+                    .monospacedDigit()
+                    .foregroundStyle(.secondary)
+            }
+            Slider(value: $value, in: 0...5000, step: 25)
+        }
+    }
+}
+
+private struct AnimationTimelineStrip: View {
+    let animation: Theme.Animation
+
+    var body: some View {
+        GeometryReader { geometry in
+            let total = max(animation.fadeDuration + animation.delay, 1)
+            HStack(spacing: 0) {
+                Rectangle()
+                    .fill(Color.accentColor.opacity(0.35 + 0.65 * min(max(animation.brightness, 0), 1)))
+                    .frame(width: geometry.size.width * CGFloat(animation.fadeDuration / total))
+                Rectangle()
+                    .fill(Color.secondary.opacity(0.18))
+                    .frame(width: geometry.size.width * CGFloat(animation.delay / total))
+            }
+            .clipShape(Capsule())
+            .background(Capsule().fill(.quaternary))
+        }
+        .frame(height: 8)
+        .help("Accent is fade; gray is hold after fade. Opacity reflects target brightness.")
+    }
+}
+
+private struct ReactionCurveView: View {
+    let reactive: ReactiveMode
+
+    private var entries: [(label: String, value: Double, color: Color)] {
+        [
+            ("Space", reactive.spaceBump, .blue),
+            ("Enter", reactive.enterBump, .green),
+            ("Modifier", reactive.modifierBump, .orange),
+        ]
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            GeometryReader { geometry in
+                let width = geometry.size.width
+                let height = geometry.size.height
+                let floor = min(max(reactive.floor, 0), 1)
+                let floorY = height * (1 - CGFloat(floor))
+                ZStack {
+                    Path { path in
+                        path.move(to: CGPoint(x: 0, y: floorY))
+                        path.addLine(to: CGPoint(x: width, y: floorY))
+                    }
+                    .stroke(Color.secondary.opacity(0.35),
+                            style: StrokeStyle(lineWidth: 1, dash: [4, 3]))
+
+                    ForEach(entries.indices, id: \.self) { index in
+                        let entry = entries[index]
+                        Path { path in
+                            let top = min(1, floor + max(entry.value, 0))
+                            path.move(to: CGPoint(x: 0, y: height * (1 - CGFloat(top))))
+                            path.addLine(to: CGPoint(x: width, y: floorY))
+                        }
+                        .stroke(entry.color, lineWidth: 2)
+                    }
+                }
+            }
+            .frame(height: 80)
+            .kbGlassSurface(cornerRadius: 8)
+
+            HStack(spacing: 12) {
+                ForEach(entries.indices, id: \.self) { index in
+                    let entry = entries[index]
+                    Label(entry.label, systemImage: "circle.fill")
+                        .font(.caption)
+                        .foregroundStyle(entry.color)
+                }
+                Spacer()
+                Text("\(Int(reactive.decay.rounded())) ms decay")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .padding(.vertical, 4)
     }
 }
 
