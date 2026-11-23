@@ -15,14 +15,15 @@ final class ThemeEditorSession: ObservableObject {
     @Published private(set) var selection = ""
     @Published private(set) var pendingSelection: String?
     @Published private(set) var themes: [String] = []
+    @Published private(set) var displayNames: [String: String] = [:]
     @Published var message: String?
 
     private var savedSnapshot: Data?
-    private let onSaved: (String) -> Void
+    private let onSaved: (String, String?) -> Void
     private let onFilesChanged: () -> Void
 
     init(library: ThemeLibrary,
-         onSaved: @escaping (String) -> Void = { _ in },
+         onSaved: @escaping (String, String?) -> Void = { _, _ in },
          onFilesChanged: @escaping () -> Void = {}) {
         self.library = library
         self.onSaved = onSaved
@@ -56,6 +57,19 @@ final class ThemeEditorSession: ObservableObject {
 
     func refresh() {
         themes = library.names()
+        displayNames = themes.reduce(into: [:]) { result, name in
+            let theme = try? library.load(name)
+            let display = theme?.name.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            result[name] = display.isEmpty ? name : display
+        }
+    }
+
+    func displayName(for name: String) -> String {
+        if name == selection {
+            let display = theme.name.trimmingCharacters(in: .whitespacesAndNewlines)
+            return display.isEmpty ? name : display
+        }
+        return displayNames[name] ?? name
     }
 
     func requestSelection(_ name: String) {
@@ -99,24 +113,37 @@ final class ThemeEditorSession: ObservableObject {
             message = validationError
             return
         }
+        let requestedName = clean(theme.name)
+        if let error = nameError(for: requestedName, excluding: selection) {
+            message = error
+            return
+        }
         do {
-            try library.write(theme, name: selection)
+            let previousName = selection
+            let renamed = requestedName != previousName
+            if renamed {
+                try library.replace(previousName, with: theme, renamedTo: requestedName)
+            } else {
+                try library.write(theme, name: previousName)
+            }
+            selection = requestedName
+            refresh()
             savedSnapshot = snapshot(of: theme)
-            onSaved(selection)
+            onSaved(selection, renamed ? previousName : nil)
             message = "Saved \"\(selection).json\"."
         } catch {
             message = error.localizedDescription
         }
     }
 
-    func create(named rawName: String) {
+    func create(named rawName: String, template: ThemeTemplate = .fade) {
         let name = clean(rawName)
         if let error = nameError(for: name) {
             message = error
             return
         }
         do {
-            try library.write(Theme.newTheme(named: name), name: name)
+            try library.write(template.theme(named: name), name: name)
             reloadAfterChange(selecting: name)
         } catch {
             message = error.localizedDescription
@@ -146,15 +173,48 @@ final class ThemeEditorSession: ObservableObject {
 
     func deleteSelected() {
         guard !selection.isEmpty else { return }
+        deleteTheme(named: selection)
+    }
+
+    func deleteTheme(named name: String) {
         do {
-            try library.trash(selection)
+            try library.trash(name)
         } catch {
-            message = "Could not delete \"\(selection).json\": \(error.localizedDescription)"
+            message = "Could not delete \"\(name).json\": \(error.localizedDescription)"
             return
         }
         onFilesChanged()
         refresh()
-        load(themes.first ?? "")
+        if selection == name {
+            load(themes.first ?? "")
+        }
+    }
+
+    func duplicateTheme(named name: String) {
+        guard !isDirty else {
+            message = "Save or discard changes before duplicating another theme."
+            return
+        }
+        do {
+            var copy = try library.load(name)
+            let newName = uniqueCopyName(for: displayName(for: name))
+            copy.name = newName
+            try library.write(copy, name: newName)
+            reloadAfterChange(selecting: newName)
+        } catch {
+            message = error.localizedDescription
+        }
+    }
+
+    private func uniqueCopyName(for base: String) -> String {
+        let existing = Set(library.names().map { $0.lowercased() })
+        var candidate = "\(base) Copy"
+        var number = 2
+        while existing.contains(candidate.lowercased()) {
+            candidate = "\(base) Copy \(number)"
+            number += 1
+        }
+        return candidate
     }
 
     func importTheme(from source: URL) {
@@ -193,7 +253,7 @@ final class ThemeEditorSession: ObservableObject {
 
     /// Validates a prospective file name. APFS is case-insensitive by
     /// default, so collisions are checked the same way.
-    func nameError(for rawName: String) -> String? {
+    func nameError(for rawName: String, excluding current: String? = nil) -> String? {
         let name = clean(rawName)
         if name.isEmpty { return "Enter a theme name." }
         if name.count > 100 { return "Theme names must be 100 characters or fewer." }
@@ -204,7 +264,8 @@ final class ThemeEditorSession: ObservableObject {
         if name.caseInsensitiveCompare("hooks") == .orderedSame {
             return "\"hooks\" is reserved for hooks.json."
         }
-        if library.names().contains(where: { $0.caseInsensitiveCompare(name) == .orderedSame }) {
+        let otherNames = library.names().filter { $0 != current }
+        if otherNames.contains(where: { $0.caseInsensitiveCompare(name) == .orderedSame }) {
             return "A theme named \"\(name)\" already exists."
         }
         return nil

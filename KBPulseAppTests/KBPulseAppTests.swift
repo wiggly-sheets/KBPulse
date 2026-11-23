@@ -413,7 +413,9 @@ final class KBPulseAppTests: XCTestCase {
         let dir = FileManager.default.temporaryDirectory
             .appendingPathComponent("KBPulseTests-\(UUID().uuidString)")
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-        try ThemeStore.write(Theme.defaultYawn, to: dir.appendingPathComponent("Yawn.json"))
+        var first = Theme.defaultYawn
+        first.name = "Yawn"
+        try ThemeStore.write(first, to: dir.appendingPathComponent("Yawn.json"))
         var second = Theme.defaultYawn
         second.name = "Second"
         try ThemeStore.write(second, to: dir.appendingPathComponent("Second.json"))
@@ -429,13 +431,49 @@ final class KBPulseAppTests: XCTestCase {
         XCTAssertEqual(session.selection, "Yawn")
         XCTAssertFalse(session.isDirty)
 
-        session.theme.name = "Changed"
+        session.theme.comment = "Edited description"
         XCTAssertTrue(session.isDirty)
 
         session.save()
         XCTAssertFalse(session.isDirty)
+        XCTAssertEqual(try ThemeStore.loadTheme(at: dir.appendingPathComponent("Yawn.json")).comment,
+                       "Edited description")
+    }
+
+    func testEditorSessionSaveRenamesFileAndReportsOldName() throws {
+        let dir = try makeThemeDirectory()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        var savedOldName: String?
+        let session = ThemeEditorSession(
+            library: ThemeLibrary(root: dir),
+            onSaved: { _, oldName in savedOldName = oldName }
+        )
+
+        session.activate(initial: "Yawn")
+        session.theme.name = "Renamed"
+        session.save()
+
+        XCTAssertEqual(session.selection, "Renamed")
+        XCTAssertEqual(savedOldName, "Yawn")
+        XCTAssertFalse(FileManager.default.fileExists(atPath: dir.appendingPathComponent("Yawn.json").path))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: dir.appendingPathComponent("Renamed.json").path))
+        XCTAssertEqual(try ThemeStore.loadTheme(at: dir.appendingPathComponent("Renamed.json")).name,
+                       "Renamed")
+    }
+
+    func testEditorSessionRejectsRenameCollision() throws {
+        let dir = try makeThemeDirectory()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let session = ThemeEditorSession(library: ThemeLibrary(root: dir))
+
+        session.activate(initial: "Yawn")
+        session.theme.name = "Second"
+        session.save()
+
+        XCTAssertEqual(session.selection, "Yawn")
         XCTAssertEqual(try ThemeStore.loadTheme(at: dir.appendingPathComponent("Yawn.json")).name,
-                       "Changed")
+                       "Yawn")
+        XCTAssertTrue(session.message?.contains("already exists") == true)
     }
 
     func testEditorSessionBlocksSelectionUntilDiscarded() throws {
@@ -611,6 +649,28 @@ final class KBPulseAppTests: XCTestCase {
         XCTAssertNotNil(session.nameError(for: "hooks"))
         XCTAssertNotNil(session.nameError(for: "yawn"))
         XCTAssertNil(session.nameError(for: "Fresh"))
+    }
+
+    func testThemeTemplatesProduceValidThemes() {
+        for template in ThemeTemplate.allCases {
+            let theme = template.theme(named: "Template")
+            XCTAssertTrue(theme.validate().isEmpty, "\(template) should be valid")
+        }
+    }
+
+    func testEditorSessionCreatesReactiveTemplate() throws {
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("KBPulseTests-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+
+        let session = ThemeEditorSession(library: ThemeLibrary(root: dir))
+        session.create(named: "Keys", template: .reactive)
+
+        XCTAssertEqual(session.selection, "Keys")
+        XCTAssertNotNil(session.theme.reactive)
+        XCTAssertTrue(session.theme.animations.isEmpty)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: dir.appendingPathComponent("Keys.json").path))
     }
 }
 

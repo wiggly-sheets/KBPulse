@@ -16,15 +16,23 @@ struct ThemesTab: View {
     @StateObject private var session: ThemeEditorSession
     @ObservedObject private var preview: PreviewSession
     @State private var newName = ""
-    @State private var showNew = false
+    @State private var showNewSheet = false
     @State private var showDuplicate = false
-    @State private var showDelete = false
+    @State private var deleteTarget: String?
+    @State private var searchText = ""
+    @State private var isDropTargeted = false
 
     init(state: AppState) {
         self.state = state
         _session = StateObject(wrappedValue: ThemeEditorSession(
             library: ThemeLibrary(root: AppState.themesDir),
-            onSaved: { state.themeEdited($0) },
+            onSaved: { name, oldName in
+                if let oldName {
+                    state.themeRenamed(from: oldName, to: name)
+                } else {
+                    state.themeEdited(name)
+                }
+            },
             onFilesChanged: { state.themeFilesChanged() }
         ))
         _preview = ObservedObject(wrappedValue: state.preview)
@@ -43,12 +51,13 @@ struct ThemesTab: View {
             session.activate(initial: state.selectedTheme)
         }
         .onDisappear { state.cancelPreview() }
-        .alert("New theme", isPresented: $showNew) {
-            TextField("Theme name", text: $newName)
-            Button("Create") { session.create(named: newName) }
-            Button("Cancel", role: .cancel) {}
-        } message: {
-            Text("Creates \(newName.isEmpty ? "a new theme" : "\"\(newName).json\"").")
+        .sheet(isPresented: $showNewSheet) {
+            NewThemeSheet { name, template in
+                session.create(named: name, template: template)
+                showNewSheet = false
+            } onCancel: {
+                showNewSheet = false
+            }
         }
         .alert("Duplicate theme", isPresented: $showDuplicate) {
             TextField("New theme name", text: $newName)
@@ -57,11 +66,17 @@ struct ThemesTab: View {
         } message: {
             Text("Creates a copy of \"\(session.selection).json\" named \"\(newName).json\".")
         }
-        .alert("Delete theme", isPresented: $showDelete) {
-            Button("Move to Trash", role: .destructive) { session.deleteSelected() }
-            Button("Cancel", role: .cancel) {}
+        .alert("Delete theme", isPresented: Binding(
+            get: { deleteTarget != nil },
+            set: { if !$0 { deleteTarget = nil } }
+        )) {
+            Button("Move to Trash", role: .destructive) {
+                if let target = deleteTarget { session.deleteTheme(named: target) }
+                deleteTarget = nil
+            }
+            Button("Cancel", role: .cancel) { deleteTarget = nil }
         } message: {
-            Text("Move \"\(session.selection).json\" to the Trash? This cannot be undone from KBPulse.")
+            Text("Move \"\(deleteTarget ?? "").json\" to the Trash? This cannot be undone from KBPulse.")
         }
         .alert("KBPulse", isPresented: Binding(
             get: { session.message != nil },
@@ -90,20 +105,49 @@ struct ThemesTab: View {
 
     private var sidebar: some View {
         VStack(spacing: 0) {
+            HStack(spacing: 6) {
+                Image(systemName: "magnifyingglass")
+                    .foregroundStyle(.secondary)
+                TextField("Search themes", text: $searchText)
+                    .textFieldStyle(.plain)
+                if !searchText.isEmpty {
+                    Button {
+                        searchText = ""
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                    }
+                    .buttonStyle(.borderless)
+                    .foregroundStyle(.secondary)
+                    .help("Clear search")
+                }
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+
             if session.themes.isEmpty {
                 ContentUnavailableView(
                     "No Themes",
                     systemImage: "paintpalette",
                     description: Text("Create or import a theme to start editing.")
                 )
+            } else if visibleThemes.isEmpty {
+                ContentUnavailableView.search(text: searchText)
             } else {
                 List(selection: selectionBinding) {
-                    ForEach(session.themes, id: \.self) { name in
+                    ForEach(visibleThemes, id: \.self) { name in
                         HStack(spacing: 6) {
                             Image(systemName: "paintpalette")
                                 .foregroundStyle(.secondary)
-                            Text(name)
-                                .lineLimit(1)
+                            VStack(alignment: .leading, spacing: 1) {
+                                Text(session.displayName(for: name))
+                                    .lineLimit(1)
+                                if session.displayName(for: name) != name {
+                                    Text(name)
+                                        .font(.caption2)
+                                        .foregroundStyle(.secondary)
+                                        .lineLimit(1)
+                                }
+                            }
                             Spacer(minLength: 4)
                             if name == state.selectedTheme {
                                 Image(systemName: "keyboard")
@@ -119,6 +163,17 @@ struct ThemesTab: View {
                             }
                         }
                         .tag(name)
+                        .contextMenu {
+                            Button("Activate") { state.selectTheme(name) }
+                            Button("Reveal in Finder") {
+                                NSWorkspace.shared.activateFileViewerSelecting([
+                                    session.library.url(for: name),
+                                ])
+                            }
+                            Divider()
+                            Button("Duplicate") { session.duplicateTheme(named: name) }
+                            Button("Delete…", role: .destructive) { deleteTarget = name }
+                        }
                     }
                 }
                 .listStyle(.sidebar)
@@ -137,6 +192,30 @@ struct ThemesTab: View {
             .padding(.horizontal, 10)
             .padding(.vertical, 8)
         }
+        .background(isDropTargeted ? Color.accentColor.opacity(0.08) : Color.clear)
+        .dropDestination(for: URL.self) { urls, _ in
+            importDropped(urls)
+        } isTargeted: { targeted in
+            isDropTargeted = targeted
+        }
+    }
+
+    private var visibleThemes: [String] {
+        let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !query.isEmpty else { return session.themes }
+        return session.themes.filter { name in
+            session.displayName(for: name).localizedCaseInsensitiveContains(query)
+                || name.localizedCaseInsensitiveContains(query)
+        }
+    }
+
+    private func importDropped(_ urls: [URL]) -> Bool {
+        let files = urls.filter { $0.pathExtension.lowercased() == "json" }
+        guard !files.isEmpty else { return false }
+        for file in files {
+            session.importTheme(from: file)
+        }
+        return true
     }
 
     private var selectionBinding: Binding<String?> {
@@ -167,14 +246,18 @@ struct ThemesTab: View {
                 }
                 Section("Details") {
                     TextField("Name", text: $session.theme.name)
+                    if let issue = issue("Name") { InlineIssue(issue: issue) }
                     TextField("Description", text: $session.theme.comment, axis: .vertical)
                         .lineLimit(3...8)
                     TextField("Author", text: $session.theme.author)
                     TextField("Version", text: $session.theme.version)
                     TextField("Homepage", text: $session.theme.homepage)
+                    if let issue = issue("Homepage") { InlineIssue(issue: issue) }
                     TextField("Preview Image URL", text: $session.theme.previewImageURL)
+                    if let issue = issue("Preview Image URL") { InlineIssue(issue: issue) }
                 }
                 Section("Animations") {
+                    if let issue = issue("Animations") { InlineIssue(issue: issue) }
                     if session.theme.animations.isEmpty {
                         Text("This theme has no animations.")
                             .foregroundStyle(.secondary)
@@ -187,7 +270,14 @@ struct ThemesTab: View {
                             canMoveDown: index < session.theme.animations.count - 1,
                             onMoveUp: { moveAnimation(index, by: -1) },
                             onMoveDown: { moveAnimation(index, by: 1) },
-                            onDelete: { session.theme.animations.remove(at: index) }
+                            onDuplicate: { duplicateAnimation(index) },
+                            onInsertAfter: { insertAnimation(after: index) },
+                            onDelete: { session.theme.animations.remove(at: index) },
+                            issues: animationIssues(index),
+                            onDropAnimation: { id in
+                                moveAnimation(id: id, onto: index)
+                                return true
+                            }
                         )
                     }
                     Button("Add Animation") {
@@ -200,6 +290,12 @@ struct ThemesTab: View {
                     .help("Adds a new animation to the end of the list")
                 }
                 Section("Live Preview") {
+                    if !session.validationIssues.isEmpty {
+                        Text("Preview is blocked until the highlighted issues are fixed.")
+                            .font(.footnote)
+                            .foregroundStyle(.red)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
                     if isPreviewing {
                         HStack(spacing: 8) {
                             ProgressView()
@@ -252,6 +348,9 @@ struct ThemesTab: View {
                             UnitSlider(label: "Modifier", value: reactive.modifierBump)
                         }
                         ReactionCurveView(reactive: reactive.wrappedValue)
+                        ForEach(reactionIssues, id: \.description) { issue in
+                            InlineIssue(issue: issue)
+                        }
                         Text("While enabled, this theme reacts to keystrokes instead of running its animation loop.")
                             .font(.footnote)
                             .foregroundStyle(.secondary)
@@ -281,15 +380,6 @@ struct ThemesTab: View {
                         }
                     }
                 }
-                if !session.validationIssues.isEmpty {
-                    Section("Validation") {
-                        ForEach(Array(session.validationIssues.enumerated()), id: \.offset) { _, issue in
-                            Text(issue.description)
-                                .foregroundStyle(.red)
-                                .fixedSize(horizontal: false, vertical: true)
-                        }
-                    }
-                }
             }
             .formStyle(.grouped)
             .safeAreaInset(edge: .top, spacing: 0) { detailHeader }
@@ -297,14 +387,28 @@ struct ThemesTab: View {
     }
 
     private var detailHeader: some View {
-        HStack(spacing: 10) {
-            Text(session.selection)
-                .font(.headline)
-                .lineLimit(1)
+        let displayName = session.displayName(for: session.selection)
+        return HStack(spacing: 10) {
+            VStack(alignment: .leading, spacing: 1) {
+                Text(displayName)
+                    .font(.headline)
+                    .lineLimit(1)
+                if displayName != session.selection {
+                    Text(session.selection)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+            }
             if session.isDirty {
                 Text("Edited")
                     .font(.caption)
                     .foregroundStyle(.orange)
+            }
+            if !session.validationIssues.isEmpty {
+                Text("\(session.validationIssues.count) issue\(session.validationIssues.count == 1 ? "" : "s")")
+                    .font(.caption)
+                    .foregroundStyle(.red)
             }
             Spacer()
             Button {
@@ -318,7 +422,7 @@ struct ThemesTab: View {
                 Button("Duplicate…") { beginDuplicate() }
                 Button("Export…") { exportPanel() }
                 Divider()
-                Button("Delete…", role: .destructive) { showDelete = true }
+                Button("Delete…", role: .destructive) { deleteTarget = session.selection }
             } label: {
                 Image(systemName: "ellipsis.circle")
             }
@@ -336,9 +440,20 @@ struct ThemesTab: View {
 
     // MARK: - Actions
 
+    private func issue(_ path: String) -> ThemeIssue? {
+        session.validationIssues.first { $0.path == path }
+    }
+
+    private func animationIssues(_ index: Int) -> [ThemeIssue] {
+        session.validationIssues.filter { $0.path == "Animations[\(index)]" }
+    }
+
+    private var reactionIssues: [ThemeIssue] {
+        session.validationIssues.filter { $0.path == "Reactive" }
+    }
+
     private func beginNew() {
-        newName = ""
-        showNew = true
+        showNewSheet = true
     }
 
     private func beginDuplicate() {
@@ -351,6 +466,38 @@ struct ThemesTab: View {
         guard session.theme.animations.indices.contains(index),
               session.theme.animations.indices.contains(target) else { return }
         session.theme.animations.swapAt(index, target)
+    }
+
+    private func duplicateAnimation(_ index: Int) {
+        guard session.theme.animations.indices.contains(index) else { return }
+        let source = session.theme.animations[index]
+        let copy = Theme.Animation(
+            name: source.name.isEmpty ? "Animation Copy" : "\(source.name) Copy",
+            comment: source.comment,
+            brightness: source.brightness,
+            fadeDuration: source.fadeDuration,
+            delay: source.delay,
+            unknown: source.unknown,
+            present: source.present
+        )
+        session.theme.animations.insert(copy, at: index + 1)
+    }
+
+    private func insertAnimation(after index: Int) {
+        guard session.theme.animations.indices.contains(index) else { return }
+        session.theme.animations.insert(
+            Theme.Animation(name: "New Animation", comment: "", brightness: 0.5,
+                            fadeDuration: 500, delay: 0),
+            at: index + 1
+        )
+    }
+
+    private func moveAnimation(id: UUID, onto index: Int) {
+        guard let source = session.theme.animations.firstIndex(where: { $0.id == id }),
+              source != index else { return }
+        let animation = session.theme.animations.remove(at: source)
+        let target = source < index ? index - 1 : index
+        session.theme.animations.insert(animation, at: max(0, min(target, session.theme.animations.count)))
     }
 
     private func save() {
@@ -406,17 +553,98 @@ struct ThemesTab: View {
     }
 }
 
+private struct NewThemeSheet: View {
+    let onCreate: (String, ThemeTemplate) -> Void
+    let onCancel: () -> Void
+
+    @State private var name = ""
+    @State private var template: ThemeTemplate = .fade
+    @FocusState private var nameFocused: Bool
+
+    private var trimmedName: String {
+        name.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("New Theme")
+                    .font(.title2.bold())
+                Text("Pick a starting point. You can edit every field after creating it.")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+            }
+
+            TextField("Theme name", text: $name)
+                .textFieldStyle(.roundedBorder)
+                .focused($nameFocused)
+
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Template")
+                    .font(.headline)
+                Picker("Template", selection: $template) {
+                    ForEach(ThemeTemplate.allCases) { template in
+                        Label(template.title, systemImage: template.systemImage)
+                            .tag(template)
+                    }
+                }
+                .pickerStyle(.radioGroup)
+                .labelsHidden()
+                Text(template.summary)
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+            }
+
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Preview")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                if template == .reactive {
+                    Label("Keystroke-driven", systemImage: "keyboard")
+                        .frame(maxWidth: .infinity, minHeight: 64)
+                        .background(.quaternary, in: RoundedRectangle(cornerRadius: 8))
+                } else {
+                    BrightnessCurveView(animations: template.theme(named: trimmedName).animations)
+                        .frame(height: 64)
+                }
+            }
+
+            HStack {
+                Spacer()
+                Button("Cancel", role: .cancel, action: onCancel)
+                    .keyboardShortcut(.cancelAction)
+                Button("Create") {
+                    onCreate(trimmedName, template)
+                }
+                .keyboardShortcut(.defaultAction)
+                .disabled(trimmedName.isEmpty)
+            }
+        }
+        .padding(20)
+        .frame(width: 440)
+        .onAppear { nameFocused = true }
+    }
+}
+
 private struct AnimationEditorCard: View {
     @Binding var animation: Theme.Animation
     let canMoveUp: Bool
     let canMoveDown: Bool
     let onMoveUp: () -> Void
     let onMoveDown: () -> Void
+    let onDuplicate: () -> Void
+    let onInsertAfter: () -> Void
     let onDelete: () -> Void
+    let issues: [ThemeIssue]
+    let onDropAnimation: (UUID) -> Bool
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
+                Image(systemName: "line.3.horizontal")
+                    .foregroundStyle(.secondary)
+                    .help("Drag to reorder")
+                    .draggable(animation.id.uuidString)
                 TextField("", text: $animation.name, prompt: Text("Animation name"))
                     .labelsHidden()
                     .font(.headline)
@@ -434,11 +662,16 @@ private struct AnimationEditorCard: View {
                 .buttonStyle(.borderless)
                 .disabled(!canMoveDown)
                 .help("Move animation down")
-                Button(role: .destructive, action: onDelete) {
-                    Image(systemName: "trash")
+                Menu {
+                    Button("Duplicate") { onDuplicate() }
+                    Button("Insert After") { onInsertAfter() }
+                    Divider()
+                    Button("Delete", role: .destructive) { onDelete() }
+                } label: {
+                    Image(systemName: "ellipsis.circle")
                 }
-                .buttonStyle(.borderless)
-                .help("Delete animation")
+                .menuStyle(.borderlessButton)
+                .help("Animation actions")
             }
             AnimationTimelineStrip(animation: animation)
             TextField("Description", text: $animation.comment, axis: .vertical)
@@ -448,10 +681,28 @@ private struct AnimationEditorCard: View {
                 MillisecondField(label: "Fade", value: $animation.fadeDuration)
                 MillisecondField(label: "Hold after fade", value: $animation.delay)
             }
+            ForEach(issues, id: \.description) { issue in
+                InlineIssue(issue: issue)
+            }
         }
         .padding(.vertical, 6)
         .padding(.horizontal, 10)
         .kbGlassSurface(cornerRadius: 10)
+        .dropDestination(for: String.self) { items, _ in
+            guard let first = items.first, let id = UUID(uuidString: first) else { return false }
+            return onDropAnimation(id)
+        }
+    }
+}
+
+private struct InlineIssue: View {
+    let issue: ThemeIssue
+
+    var body: some View {
+        Label(issue.message, systemImage: "exclamationmark.circle.fill")
+            .font(.caption)
+            .foregroundStyle(.red)
+            .fixedSize(horizontal: false, vertical: true)
     }
 }
 
@@ -459,13 +710,25 @@ private struct UnitSlider: View {
     let label: String
     @Binding var value: Double
 
+    private var percent: Binding<Int> {
+        Binding(
+            get: { Int((value * 100).rounded()) },
+            set: { value = min(max(Double($0) / 100, 0), 1) }
+        )
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
-            HStack {
+            HStack(spacing: 4) {
                 Text(label)
                 Spacer()
-                Text("\(Int((value * 100).rounded()))%")
+                TextField("", value: percent, format: .number)
+                    .labelsHidden()
+                    .frame(width: 44)
+                    .multilineTextAlignment(.trailing)
                     .monospacedDigit()
+                Text("%")
+                    .font(.caption)
                     .foregroundStyle(.secondary)
             }
             Slider(value: $value, in: 0...1)
@@ -477,11 +740,26 @@ private struct MillisecondField: View {
     let label: String
     @Binding var value: Double
 
+    private let presets: [Double] = [0, 100, 250, 500, 1000, 2500]
+
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
-            Text(label)
+            Menu {
+                ForEach(presets, id: \.self) { preset in
+                    Button("\(Int(preset)) ms") { value = preset }
+                }
+            } label: {
+                HStack(spacing: 3) {
+                    Text(label)
+                    Image(systemName: "chevron.down")
+                        .font(.caption2)
+                }
                 .font(.caption)
                 .foregroundStyle(.secondary)
+            }
+            .menuStyle(.borderlessButton)
+            .fixedSize()
+            .help("Choose a duration preset")
             HStack(spacing: 6) {
                 TextField("", value: $value, format: .number.precision(.fractionLength(0...2)))
                     .labelsHidden()

@@ -347,6 +347,19 @@ final class AppState: ObservableObject {
         updateOverrideTheme()
     }
 
+    /// Keeps the active theme and overrides attached to a theme whose file
+    /// was renamed by the editor.
+    func themeRenamed(from oldName: String, to newName: String) {
+        if selectedTheme == oldName {
+            selectedTheme = newName
+            UserDefaults.standard.set(newName, forKey: "selectedTheme")
+        }
+        for (owner, theme) in overrides where theme == oldName {
+            overrides[owner] = newName
+        }
+        themeEdited(newName)
+    }
+
     /// Restarts the loop with a fresh profile after the theme file was saved.
     func themeEdited(_ name: String) {
         stopPreview()

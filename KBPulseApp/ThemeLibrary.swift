@@ -43,6 +43,31 @@ struct ThemeLibrary {
         try ThemeStore.write(theme, to: url)
     }
 
+    func replace(_ name: String, with theme: Theme, renamedTo newName: String) throws {
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        let oldURL = url(for: name)
+        let newURL = url(for: newName)
+        let temporaryURL = root.appendingPathComponent(".kbpulse-\(UUID().uuidString).tmp")
+        let backupURL = root.appendingPathComponent(".kbpulse-\(UUID().uuidString).tmp")
+        try ThemeStore.write(theme, to: temporaryURL)
+        let hadOld = FileManager.default.fileExists(atPath: oldURL.path)
+        if hadOld {
+            try FileManager.default.moveItem(at: oldURL, to: backupURL)
+        }
+        do {
+            try FileManager.default.moveItem(at: temporaryURL, to: newURL)
+            if hadOld {
+                try? FileManager.default.removeItem(at: backupURL)
+            }
+        } catch {
+            if hadOld {
+                try? FileManager.default.moveItem(at: backupURL, to: oldURL)
+            }
+            try? FileManager.default.removeItem(at: temporaryURL)
+            throw error
+        }
+    }
+
     func importTheme(from source: URL, name: String) throws {
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
         try FileManager.default.copyItem(at: source, to: url(for: name))

@@ -252,6 +252,76 @@ struct Theme {
     }
 }
 
+/// Starting points for a new theme. The sheet shows one curve for each.
+enum ThemeTemplate: String, CaseIterable, Identifiable {
+    case blank
+    case fade
+    case pulse
+    case reactive
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .blank: "Blank"
+        case .fade: "Fade In / Out"
+        case .pulse: "Pulse"
+        case .reactive: "Typing Reactions"
+        }
+    }
+
+    var summary: String {
+        switch self {
+        case .blank:
+            "One steady animation. Build the rest yourself."
+        case .fade:
+            "Fade to full brightness, then back to off."
+        case .pulse:
+            "A quick flash with a slower fade back down."
+        case .reactive:
+            "Keystrokes light the keyboard instead of a timeline."
+        }
+    }
+
+    var systemImage: String {
+        switch self {
+        case .blank: "square.dashed"
+        case .fade: "circle.lefthalf.filled"
+        case .pulse: "waveform.path.ecg"
+        case .reactive: "keyboard"
+        }
+    }
+
+    func theme(named name: String) -> Theme {
+        switch self {
+        case .blank:
+            var theme = Theme()
+            theme.name = name
+            theme.animations = [
+                Theme.Animation(name: "Steady", comment: "",
+                                brightness: 0.5, fadeDuration: 500, delay: 1000),
+            ]
+            return theme
+        case .fade:
+            return Theme.newTheme(named: name)
+        case .pulse:
+            var theme = Theme.newTheme(named: name)
+            theme.animations = [
+                Theme.Animation(name: "Pulse Up", comment: "",
+                                brightness: 1, fadeDuration: 120, delay: 60),
+                Theme.Animation(name: "Pulse Down", comment: "",
+                                brightness: 0, fadeDuration: 300, delay: 600),
+            ]
+            return theme
+        case .reactive:
+            var theme = Theme()
+            theme.name = name
+            theme.reactive = ReactiveMode()
+            return theme
+        }
+    }
+}
+
 /// Config for typing-reactive themes. While active, the engine runs this
 /// instead of the theme's animation loop. Values are kept as written so the
 /// validator can report bad files; playback clamps them.
