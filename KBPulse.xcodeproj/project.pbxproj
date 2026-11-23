@@ -14,6 +14,10 @@
 		4F9B00000000000000000005 /* HookStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F9B0000000000000000000F /* HookStore.swift */; };
 		4F9B0000000000000000001F /* ThemeStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F9B0000000000000000001C /* ThemeStore.swift */; };
 		4F9B00000000000000000040 /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F9B00000000000000000041 /* Theme.swift */; };
+		4F9B00000000000000000059 /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F9B00000000000000000041 /* Theme.swift */; };
+		4F9B0000000000000000005A /* ThemeStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F9B0000000000000000001C /* ThemeStore.swift */; };
+		4F9B0000000000000000005B /* ThemeLibrary.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F9B00000000000000000051 /* ThemeLibrary.swift */; };
+		4F9B0000000000000000005D /* main.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F9B0000000000000000005C /* main.swift */; };
 		4F9B00000000000000000052 /* ThemeLibrary.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F9B00000000000000000051 /* ThemeLibrary.swift */; };
 		4F9B00000000000000000054 /* ThemeEditorSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F9B00000000000000000053 /* ThemeEditorSession.swift */; };
 		4F9B00000000000000000056 /* PreviewSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F9B00000000000000000055 /* PreviewSession.swift */; };
@@ -27,7 +31,6 @@
 		4F9B0000000000000000000A /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 4F9B00000000000000000011 /* Assets.xcassets */; };
 		4F97943227274FAF003273E9 /* KBPAnimation.m in Sources */ = {isa = PBXBuildFile; fileRef = 4F97943127274FAF003273E9 /* KBPAnimation.m */; };
 		4F97943527275725003273E9 /* KBPProfile.m in Sources */ = {isa = PBXBuildFile; fileRef = 4F97943427275725003273E9 /* KBPProfile.m */; };
-		4FF354AF27209F3D00F7F65E /* main.m in Sources */ = {isa = PBXBuildFile; fileRef = 4FF354AE27209F3D00F7F65E /* main.m */; };
 		4FF354D82720D3B500F7F65E /* KBPPulseManager.m in Sources */ = {isa = PBXBuildFile; fileRef = 4FF354D72720D3B500F7F65E /* KBPPulseManager.m */; };
 		4FF354DD2720DAC400F7F65E /* KBPAnimator.m in Sources */ = {isa = PBXBuildFile; fileRef = 4FF354DC2720DAC400F7F65E /* KBPAnimator.m */; };
 		4F9B00000000000000000026 /* CLISymlinkManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F9B00000000000000000025 /* CLISymlinkManager.swift */; };
@@ -97,6 +100,11 @@
 		4F9B0000000000000000000E /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		4F9B0000000000000000000F /* HookStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HookStore.swift; sourceTree = "<group>"; };
 		4F9B0000000000000000001C /* ThemeStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThemeStore.swift; sourceTree = "<group>"; };
+		4F9B00000000000000000041 /* Theme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Theme.swift; sourceTree = "<group>"; };
+		4F9B00000000000000000051 /* ThemeLibrary.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThemeLibrary.swift; sourceTree = "<group>"; };
+		4F9B00000000000000000053 /* ThemeEditorSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThemeEditorSession.swift; sourceTree = "<group>"; };
+		4F9B00000000000000000055 /* PreviewSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PreviewSession.swift; sourceTree = "<group>"; };
+		4F9B00000000000000000057 /* ThemeTimeline.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThemeTimeline.swift; sourceTree = "<group>"; };
 		4F9B0000000000000000001D /* ReactiveEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReactiveEngine.swift; sourceTree = "<group>"; };
 		4F9B0000000000000000001E /* ThemeEditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThemeEditorView.swift; sourceTree = "<group>"; };
 		4F9B00000000000000000025 /* CLISymlinkManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CLISymlinkManager.swift; sourceTree = "<group>"; };
@@ -110,7 +118,7 @@
 		4F9B00000000000000000012 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		4F9B00000000000000000013 /* KBPulse.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = KBPulse.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		4FF354AB27209F3D00F7F65E /* kbpulse */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = kbpulse; sourceTree = BUILT_PRODUCTS_DIR; };
-		4FF354AE27209F3D00F7F65E /* main.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = main.m; sourceTree = "<group>"; };
+		4F9B0000000000000000005C /* main.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = main.swift; sourceTree = "<group>"; };
 		4FF354D52720D20200F7F65E /* KeyboardBrightnessClient.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = KeyboardBrightnessClient.h; sourceTree = "<group>"; };
 		4FF354D62720D3B500F7F65E /* KBPPulseManager.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = KBPPulseManager.h; sourceTree = "<group>"; };
 		4FF354D72720D3B500F7F65E /* KBPPulseManager.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = KBPPulseManager.m; sourceTree = "<group>"; };
@@ -180,7 +188,7 @@
 		4FF354AD27209F3D00F7F65E /* KBPulse */ = {
 			isa = PBXGroup;
 			children = (
-				4FF354AE27209F3D00F7F65E /* main.m */,
+				4F9B0000000000000000005C /* main.swift */,
 				4F97943327275725003273E9 /* KBPProfile.h */,
 				4F97943427275725003273E9 /* KBPProfile.m */,
 				4F97943027274FAF003273E9 /* KBPAnimation.h */,
@@ -204,6 +212,11 @@
 				4F9B0000000000000000000E /* SettingsView.swift */,
 				4F9B0000000000000000000F /* HookStore.swift */,
 				4F9B0000000000000000001C /* ThemeStore.swift */,
+				4F9B00000000000000000041 /* Theme.swift */,
+				4F9B00000000000000000051 /* ThemeLibrary.swift */,
+				4F9B00000000000000000053 /* ThemeEditorSession.swift */,
+				4F9B00000000000000000055 /* PreviewSession.swift */,
+				4F9B00000000000000000057 /* ThemeTimeline.swift */,
 				4F9B0000000000000000001D /* ReactiveEngine.swift */,
 				4F9B0000000000000000001E /* ThemeEditorView.swift */,
 				4F9B00000000000000000034 /* GlassSupport.swift */,
@@ -341,7 +354,10 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				4FF354AF27209F3D00F7F65E /* main.m in Sources */,
+				4F9B0000000000000000005D /* main.swift in Sources */,
+				4F9B00000000000000000059 /* Theme.swift in Sources */,
+				4F9B0000000000000000005A /* ThemeStore.swift in Sources */,
+				4F9B0000000000000000005B /* ThemeLibrary.swift in Sources */,
 				4F97943527275725003273E9 /* KBPProfile.m in Sources */,
 				4FF354D82720D3B500F7F65E /* KBPPulseManager.m in Sources */,
 				4F97943227274FAF003273E9 /* KBPAnimation.m in Sources */,
@@ -585,6 +601,8 @@
 				MACOSX_DEPLOYMENT_TARGET = "$(RECOMMENDED_MACOSX_DEPLOYMENT_TARGET)";
 				PRODUCT_BUNDLE_IDENTIFIER = com.ethanrdoesmc.kbpulse;
 				PRODUCT_NAME = kbpulse;
+				SWIFT_OBJC_BRIDGING_HEADER = "KBPulseApp/KBPulse-Bridging-Header.h";
+				SWIFT_VERSION = 5.0;
 			};
 			name = Debug;
 		};
@@ -600,6 +618,8 @@
 				PRODUCT_BUNDLE_IDENTIFIER = com.ethanrdoesmc.kbpulse;
 				PRODUCT_NAME = kbpulse;
 				PROVISIONING_PROFILE_SPECIFIER = "";
+				SWIFT_OBJC_BRIDGING_HEADER = "KBPulseApp/KBPulse-Bridging-Header.h";
+				SWIFT_VERSION = 5.0;
 			};
 			name = Release;
 		};

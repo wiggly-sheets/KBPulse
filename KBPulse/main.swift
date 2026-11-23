@@ -1,0 +1,117 @@
+//
+//  main.swift
+//  kbpulse
+//
+//  Command-line entry point. Theme listing and validation use the same Theme
+//  module and Application Support directory as the app.
+//
+
+import AppKit
+import Foundation
+
+private let bundleIdentifier = "com.ethanrdoesmc.kbpulseapp"
+
+private func usage() {
+    print("Usage: kbpulse [set <profile> | flash | off | list | validate <file>]")
+    print("Run without a command to animate the default profile directly.")
+}
+
+private func handleCommand(_ command: String, _ argument: String?) -> Int32 {
+    switch command {
+    case "list":
+        for name in ThemeLibrary(root: ThemeLocations.themesDir).names() {
+            print(name)
+        }
+        return 0
+    case "validate":
+        guard let argument else {
+            print("Usage: kbpulse validate <file>")
+            return 1
+        }
+        let url = URL(fileURLWithPath: (argument as NSString).expandingTildeInPath)
+        do {
+            let theme = try ThemeStore.loadTheme(at: url)
+            let issues = theme.validate()
+            guard issues.isEmpty else {
+                for issue in issues {
+                    print(issue.description)
+                }
+                return 1
+            }
+            print("Valid theme.")
+            return 0
+        } catch {
+            print("Invalid theme: \(error.localizedDescription)")
+            return 1
+        }
+    case "set", "flash", "off":
+        if command == "set" && argument == nil {
+            print("Usage: kbpulse set <profile>")
+            return 1
+        }
+        guard !NSRunningApplication.runningApplications(withBundleIdentifier: bundleIdentifier).isEmpty else {
+            print("KBPulseApp is not running — launch it first")
+            return 1
+        }
+        var userInfo: [String: String] = ["command": command]
+        if let argument { userInfo["profile"] = argument }
+        DistributedNotificationCenter.default().postNotificationName(
+            NSNotification.Name("com.ethanrdoesmc.kbpulse.command"),
+            object: nil,
+            userInfo: userInfo,
+            deliverImmediately: true
+        )
+        print("Sent '\(command)' command to KBPulseApp")
+        return 0
+    default:
+        usage()
+        return 1
+    }
+}
+
+private func animateDefaultProfile() -> Never {
+    print("KBPulse by EthanRDoesMC")
+    KBPPulseManager.configure()
+    print("Animating keyboard. Press ctrl-c or close terminal to stop.")
+
+    ThemeStore.createDefaultYawnIfMissing()
+    let url = ThemeLocations.themesDir.appendingPathComponent("Yawn.json")
+    guard let theme = try? ThemeStore.loadTheme(at: url) else {
+        print("Could not load Yawn.json.")
+        exit(1)
+    }
+    let profile = KBPProfile(dictionary: theme.dictionary())
+    var interval = profile.totalDuration().doubleValue
+    if interval <= 0 { interval = 1.0 }
+
+    Timer.scheduledTimer(withTimeInterval: interval, repeats: true) { _ in
+        for case let animation as KBPAnimation in profile.animations {
+            KBPAnimator.setBrightness(animation.brightness.floatValue,
+                                      withDuration: animation.fadeDuration.int32Value)
+            Thread.sleep(forTimeInterval: animation.totalDuration().doubleValue / 1000)
+        }
+    }
+
+    signal(SIGINT, SIG_IGN)
+    signal(SIGTERM, SIG_IGN)
+    signal(SIGHUP, SIG_IGN)
+    let sources = [SIGINT, SIGTERM, SIGHUP].map { signalNumber in
+        let source = DispatchSource.makeSignalSource(signal: signalNumber, queue: .main)
+        source.setEventHandler {
+            KBPPulseManager.restoreBacklightSettings()
+            exit(0)
+        }
+        source.resume()
+        return source
+    }
+    _ = sources
+
+    RunLoop.current.run()
+    exit(0)
+}
+
+let arguments = CommandLine.arguments
+if arguments.count > 1 {
+    exit(handleCommand(arguments[1], arguments.count > 2 ? arguments[2] : nil))
+}
+animateDefaultProfile()
