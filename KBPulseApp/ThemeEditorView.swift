@@ -17,6 +17,7 @@ struct ThemesTab: View {
     @ObservedObject private var preview: PreviewSession
     @State private var newName = ""
     @State private var showNewSheet = false
+    @State private var showBundled = false
     @State private var showDuplicate = false
     @State private var deleteTarget: String?
     @State private var detailSection: DetailSection = .design
@@ -60,6 +61,9 @@ struct ThemesTab: View {
             } onCancel: {
                 showNewSheet = false
             }
+        }
+        .sheet(isPresented: $showBundled) {
+            BundledThemesSheet(session: session)
         }
         .alert("Duplicate theme", isPresented: $showDuplicate) {
             TextField("New theme name", text: $newName)
@@ -187,6 +191,7 @@ struct ThemesTab: View {
                 Menu {
                     Button("New Theme…") { beginNew() }
                     Button("Import Theme…") { importPanel() }
+                    Button("Browse Bundled Themes…") { showBundled = true }
                 } label: {
                     Label("Add Theme", systemImage: "plus")
                 }
@@ -603,6 +608,77 @@ struct ThemesTab: View {
            let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility") {
             NSWorkspace.shared.open(url)
         }
+    }
+}
+
+private struct BundledThemesSheet: View {
+    @ObservedObject var session: ThemeEditorSession
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        VStack(spacing: 0) {
+            HStack(alignment: .top) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Bundled Themes").font(.title2.weight(.semibold))
+                    Text("Add an editable copy. Existing themes are never overwritten.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+                Button("Done") { dismiss() }
+                    .keyboardShortcut(.defaultAction)
+            }
+            .padding(20)
+            Divider()
+            List {
+                Section("Standard") {
+                    ForEach(BundledThemes.all.filter { $0.kind == .standard }) { bundled in
+                        row(bundled)
+                    }
+                }
+                Section("Reactive") {
+                    ForEach(BundledThemes.all.filter { $0.kind == .reactive }) { bundled in
+                        row(bundled)
+                    }
+                }
+            }
+            .listStyle(.inset)
+        }
+        .frame(width: 620, height: 580)
+    }
+
+    private func row(_ bundled: BundledTheme) -> some View {
+        let installed = session.themes.contains(bundled.theme.name)
+        return HStack(alignment: .top, spacing: 12) {
+            Image(systemName: bundled.kind == .reactive ? "keyboard" : "waveform.path.ecg")
+                .foregroundStyle(.secondary)
+                .frame(width: 18)
+            VStack(alignment: .leading, spacing: 5) {
+                HStack(spacing: 8) {
+                    Text(bundled.theme.name).font(.headline)
+                    Text(bundled.kind == .reactive ? "Reactive" : "Loop")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                Text(bundled.summary)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                if !bundled.theme.animations.isEmpty {
+                    BrightnessCurveView(animations: bundled.theme.animations)
+                        .frame(height: 32)
+                }
+            }
+            Spacer(minLength: 8)
+            if installed {
+                Label("Installed", systemImage: "checkmark")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            } else {
+                Button("Add") { session.installBundled(bundled) }
+            }
+        }
+        .padding(.vertical, 4)
     }
 }
 

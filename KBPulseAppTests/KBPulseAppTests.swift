@@ -711,6 +711,15 @@ final class KBPulseAppTests: XCTestCase {
         }
     }
 
+    func testBundledThemesAreValidAndUnique() {
+        XCTAssertFalse(BundledThemes.all.isEmpty)
+        XCTAssertEqual(Set(BundledThemes.all.map(\.theme.name)).count, BundledThemes.all.count)
+        for bundled in BundledThemes.all {
+            let issues = bundled.theme.validate().map(\.description).joined(separator: "\n")
+            XCTAssertTrue(issues.isEmpty, "\(bundled.theme.name): \(issues)")
+        }
+    }
+
     func testInitialThemesSeedOnlyOnce() throws {
         let dir = FileManager.default.temporaryDirectory
             .appendingPathComponent("KBPulseSeed-\(UUID().uuidString)")

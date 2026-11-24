@@ -256,6 +256,24 @@ final class ThemeEditorSession: ObservableObject {
         return candidate
     }
 
+    func installBundled(_ bundled: BundledTheme) {
+        if isDirty {
+            message = "Save or discard your current edits before adding a bundled theme."
+            return
+        }
+        let name = clean(bundled.theme.name)
+        if let error = nameError(for: name) {
+            message = error
+            return
+        }
+        do {
+            try library.write(bundled.theme, name: name)
+            reloadAfterChange(selecting: name)
+        } catch {
+            message = error.localizedDescription
+        }
+    }
+
     func importTheme(from source: URL) {
         let name = clean(source.deletingPathExtension().lastPathComponent)
         if let error = nameError(for: name) {

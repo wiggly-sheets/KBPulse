@@ -21,6 +21,7 @@
 		4F9B0000000000000000005F /* SystemVolumeClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F9B0000000000000000005E /* SystemVolumeClient.swift */; };
 		4F9B00000000000000000060 /* SystemVolumeClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F9B0000000000000000005E /* SystemVolumeClient.swift */; };
 		4F9B00000000000000000062 /* HapticPlayer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F9B00000000000000000063 /* HapticPlayer.swift */; };
+		4F9B00000000000000000069 /* BundledThemes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F9B00000000000000000068 /* BundledThemes.swift */; };
 		4F9B00000000000000000064 /* KBPHapticActuator.m in Sources */ = {isa = PBXBuildFile; fileRef = 4F9B00000000000000000065 /* KBPHapticActuator.m */; };
 		4F9B00000000000000000066 /* KBPHapticActuator.m in Sources */ = {isa = PBXBuildFile; fileRef = 4F9B00000000000000000065 /* KBPHapticActuator.m */; };
 		4F9B00000000000000000052 /* ThemeLibrary.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F9B00000000000000000051 /* ThemeLibrary.swift */; };
@@ -104,6 +105,7 @@
 		4F9B00000000000000000057 /* ThemeTimeline.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThemeTimeline.swift; sourceTree = "<group>"; };
 		4F9B0000000000000000005E /* SystemVolumeClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SystemVolumeClient.swift; sourceTree = "<group>"; };
 		4F9B00000000000000000063 /* HapticPlayer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HapticPlayer.swift; sourceTree = "<group>"; };
+		4F9B00000000000000000068 /* BundledThemes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BundledThemes.swift; sourceTree = "<group>"; };
 		4F9B00000000000000000067 /* KBPHapticActuator.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = KBPHapticActuator.h; sourceTree = "<group>"; };
 		4F9B00000000000000000065 /* KBPHapticActuator.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = KBPHapticActuator.m; sourceTree = "<group>"; };
 		4F9B0000000000000000001D /* ReactiveEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReactiveEngine.swift; sourceTree = "<group>"; };
@@ -226,6 +228,7 @@
 				493B366651A62F2550960559 /* AgentHookRuntime.swift */,
 		4F9B0000000000000000005E /* SystemVolumeClient.swift */,
 		4F9B00000000000000000063 /* HapticPlayer.swift */,
+		4F9B00000000000000000068 /* BundledThemes.swift */,
 			);
 			path = KBPulseApp;
 			sourceTree = "<group>";
@@ -387,6 +390,7 @@
 				9956C14B64915C68D2C7C882 /* AgentHookRuntime.swift in Sources */,
 				4F9B0000000000000000005F /* SystemVolumeClient.swift in Sources */,
 				4F9B00000000000000000062 /* HapticPlayer.swift in Sources */,
+				4F9B00000000000000000069 /* BundledThemes.swift in Sources */,
 				4F9B00000000000000000064 /* KBPHapticActuator.m in Sources */,
 				4F9B00000000000000000009 /* KBPPulseManager.m in Sources */,
 				4F9B00000000000000000006 /* KBPAnimator.m in Sources */,
