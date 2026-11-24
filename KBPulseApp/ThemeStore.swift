@@ -54,16 +54,28 @@ enum ThemeStore {
     }
 
     /// Creates Pulse.json, a typing-reactive example theme, if missing.
-    static func createReactiveExampleIfMissing() {
-        let url = ThemeLocations.themesDir.appendingPathComponent("Pulse.json")
+    static func createReactiveExampleIfMissing(in directory: URL = ThemeLocations.themesDir) {
+        let url = directory.appendingPathComponent("Pulse.json")
         guard !FileManager.default.fileExists(atPath: url.path) else { return }
         try? write(Theme.reactiveExample, to: url)
     }
 
     /// Creates Yawn.json from the one built-in default theme if missing.
-    static func createDefaultYawnIfMissing() {
-        let url = ThemeLocations.themesDir.appendingPathComponent("Yawn.json")
+    static func createDefaultYawnIfMissing(in directory: URL = ThemeLocations.themesDir) {
+        let url = directory.appendingPathComponent("Yawn.json")
         guard !FileManager.default.fileExists(atPath: url.path) else { return }
         try? write(Theme.defaultYawn, to: url)
+    }
+
+    /// Seeds the starter themes exactly once. A deleted starter stays deleted.
+    static func seedInitialThemesIfNeeded(in directory: URL = ThemeLocations.themesDir,
+                                          defaults: UserDefaults = .standard) {
+        guard !defaults.bool(forKey: "themesSeeded") else { return }
+        let names = ThemeLibrary(root: directory).names()
+        if names.isEmpty {
+            createDefaultYawnIfMissing(in: directory)
+            createReactiveExampleIfMissing(in: directory)
+        }
+        defaults.set(true, forKey: "themesSeeded")
     }
 }

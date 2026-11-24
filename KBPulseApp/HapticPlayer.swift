@@ -2,8 +2,8 @@
 //  HapticPlayer.swift
 //  KBPulseApp
 //
-//  Trackpad haptics. The public API provides short taps only; continuous
-//  waveforms would need the private MultitouchSupport actuator.
+//  Trackpad haptics. Public AppKit taps only work with a finger on the
+//  trackpad, so MultitouchSupport is the primary path for background taps.
 //
 
 import AppKit
@@ -13,8 +13,9 @@ protocol HapticPlayer: AnyObject {
     func tap()
 }
 
-/// Public AppKit haptics. Off unless the user enables the setting.
-/// Rate-limited so a held key cannot buzz the trackpad.
+/// Private MultitouchSupport taps, with public AppKit as fallback.
+/// Off unless the user enables the setting. Rate-limited so a held key
+/// cannot buzz the trackpad.
 final class SystemHapticPlayer: HapticPlayer {
     private let lock = NSLock()
     private var lastTap = 0.0
@@ -30,6 +31,11 @@ final class SystemHapticPlayer: HapticPlayer {
         }
         lastTap = now
         lock.unlock()
+        let level = UserDefaults.standard.object(forKey: "hapticsIntensity") as? Double ?? 1.0
+        // The usable actuator range starts around half strength, so map the
+        // whole slider 0...1 onto 0.5...1.0.
+        let intensity = 0.5 + 0.5 * min(1, max(0, level))
+        if KBPHapticActuator.tap(withIntensity: Float(intensity)) { return }
         DispatchQueue.main.async {
             NSHapticFeedbackManager.defaultPerformer.perform(.generic, performanceTime: .now)
         }

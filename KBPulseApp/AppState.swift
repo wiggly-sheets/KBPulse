@@ -66,6 +66,9 @@ final class AppState: ObservableObject {
     @Published var hapticsEnabled = false {
         didSet { UserDefaults.standard.set(hapticsEnabled, forKey: "hapticsEnabled") }
     }
+    @Published var hapticsIntensity = 1.0 {
+        didSet { UserDefaults.standard.set(hapticsIntensity, forKey: "hapticsIntensity") }
+    }
     @Published private(set) var selectedTheme = ""
     /// Transient hook theme layered over the persisted base theme. Never saved.
     @Published private(set) var overrideTheme: String?
@@ -116,13 +119,11 @@ final class AppState: ObservableObject {
         }
         try? FileManager.default.createDirectory(at: Self.themesDir, withIntermediateDirectories: true)
         HookStore.ensureFile()
-        if !FileManager.default.fileExists(atPath: Self.themesDir.appendingPathComponent("Yawn.json").path) {
-            ThemeStore.createDefaultYawnIfMissing()
-        }
-        ThemeStore.createReactiveExampleIfMissing()
+        ThemeStore.seedInitialThemesIfNeeded()
         let defaults = UserDefaults.standard
         engineOn = defaults.object(forKey: "engineEnabled") as? Bool ?? true
         hapticsEnabled = defaults.object(forKey: "hapticsEnabled") as? Bool ?? false
+        hapticsIntensity = defaults.object(forKey: "hapticsIntensity") as? Double ?? 1.0
         iconDisplayMode = IconDisplayMode(rawValue: defaults.string(forKey: "iconDisplayMode") ?? "menu") ?? .menuBarOnly
         refreshThemes()
         refreshCLIStatus()
@@ -200,6 +201,10 @@ final class AppState: ObservableObject {
 
     var hapticsBinding: Binding<Bool> {
         Binding(get: { self.hapticsEnabled }, set: { self.hapticsEnabled = $0 })
+    }
+
+    var hapticsIntensityBinding: Binding<Double> {
+        Binding(get: { self.hapticsIntensity }, set: { self.hapticsIntensity = $0 })
     }
 
     var themeBinding: Binding<String> {

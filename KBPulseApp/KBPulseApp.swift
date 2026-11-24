@@ -7,9 +7,17 @@
 
 import SwiftUI
 
+final class AppDelegate: NSObject, NSApplicationDelegate {
+    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
+        false
+    }
+}
+
 @main
 struct KBPulseApp: App {
     // MARK: - App lifecycle
+
+    @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
 
     /// Ensures only one instance of the app runs; reopens the existing instance
     /// rather than creating a new blank window.

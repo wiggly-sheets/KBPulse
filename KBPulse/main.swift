@@ -77,10 +77,9 @@ private func animateDefaultProfile() -> Never {
     KBPPulseManager.configure()
     print("Animating keyboard. Press ctrl-c or close terminal to stop.")
 
-    ThemeStore.createDefaultYawnIfMissing()
     let url = ThemeLocations.themesDir.appendingPathComponent("Yawn.json")
     guard let theme = try? ThemeStore.loadTheme(at: url) else {
-        print("Could not load Yawn.json.")
+        print("No Yawn.json found. Create or select a theme in KBPulse.")
         exit(1)
     }
     let timeline = ThemeTimeline(animations: theme.animations)

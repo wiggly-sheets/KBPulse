@@ -711,6 +711,44 @@ final class KBPulseAppTests: XCTestCase {
         }
     }
 
+    func testInitialThemesSeedOnlyOnce() throws {
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("KBPulseSeed-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let suite = "KBPulseSeed-\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suite)!
+        defer {
+            try? FileManager.default.removeItem(at: dir)
+            defaults.removePersistentDomain(forName: suite)
+        }
+
+        ThemeStore.seedInitialThemesIfNeeded(in: dir, defaults: defaults)
+        let yawn = dir.appendingPathComponent("Yawn.json")
+        let pulse = dir.appendingPathComponent("Pulse.json")
+        XCTAssertTrue(FileManager.default.fileExists(atPath: yawn.path))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: pulse.path))
+
+        try FileManager.default.removeItem(at: yawn)
+        ThemeStore.seedInitialThemesIfNeeded(in: dir, defaults: defaults)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: yawn.path))
+    }
+
+    func testInitialSeedingLeavesExistingLibraryAlone() throws {
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("KBPulseSeed-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let suite = "KBPulseSeed-\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suite)!
+        defer {
+            try? FileManager.default.removeItem(at: dir)
+            defaults.removePersistentDomain(forName: suite)
+        }
+
+        try ThemeStore.write(Theme.defaultYawn, to: dir.appendingPathComponent("Custom.json"))
+        ThemeStore.seedInitialThemesIfNeeded(in: dir, defaults: defaults)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: dir.appendingPathComponent("Pulse.json").path))
+    }
+
     func testEditorSessionCreatesReactiveTemplate() throws {
         let dir = FileManager.default.temporaryDirectory
             .appendingPathComponent("KBPulseTests-\(UUID().uuidString)")

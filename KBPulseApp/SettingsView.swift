@@ -65,6 +65,19 @@ struct SettingsView: View {
                 .font(.footnote)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
+            if state.hapticsEnabled {
+                HStack {
+                    Text("Haptics intensity")
+                    Slider(value: state.hapticsIntensityBinding, in: 0...1.0, step: 0.05)
+                    Text("\(Int((state.hapticsIntensity * 100).rounded()))%")
+                        .monospacedDigit()
+                        .frame(width: 38, alignment: .trailing)
+                }
+                Text("0% is a light tick. 100% is a firm click.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
             Picker("Theme", selection: state.themeBinding) {
                 ForEach(state.themes, id: \.self) { Text($0).tag($0) }
             }

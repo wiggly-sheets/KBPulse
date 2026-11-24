@@ -7,3 +7,4 @@
 
 #import "../KBPulse/KBPAnimator.h"
 #import "../KBPulse/KBPPulseManager.h"
+#import "../KBPulse/KBPHapticActuator.h"
