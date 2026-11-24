@@ -69,14 +69,6 @@ static dispatch_once_t sOnce;
     return sActuators.count > 0;
 }
 
-+ (BOOL)isAvailable {
-    return [self prepare];
-}
-
-+ (BOOL)tap {
-    return [self tapWithIntensity:1.0f];
-}
-
 + (BOOL)tapWithIntensity:(float)intensity {
     if (![self prepare]) return NO;
 
